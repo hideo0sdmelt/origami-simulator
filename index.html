@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="表と裏の画像から、紙を折らずに折り紙を試せるシミュレーター">
 <title>おりがみシミュレーター</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="おりがみ">
+<meta name="theme-color" content="#e9eeea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101512" media="(prefers-color-scheme: dark)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700&family=Dela+Gothic+One&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
@@ -224,6 +232,12 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
       </ol>
       <p class="note">「点を合わせる」は角をどこかに重ねる折り方、「辺を合わせる」は辺を別の辺に重ねる折り方です。例えば長方形の上の辺を右の辺へドラッグすると、先端に三角ができます。</p>
       <p class="note">画像は紙の端ぴったりに切り抜いておくと、表と裏がきれいに重なります。</p>
+    </section>
+
+    <section id="installSec" hidden>
+      <h2>アプリとして使う</h2>
+      <p class="note" id="installNote" style="margin:0"></p>
+      <button id="bInstall" hidden style="margin-top:8px">ホーム画面に追加</button>
     </section>
 
     <section>
@@ -857,6 +871,23 @@ rebuildPaper();
 setMode('idle');updateUI();
 // redraw the sample once web fonts arrive so its letters use them
 document.fonts?.ready.then(()=>{if(!src.front&&!src.back){paper=makeSample();draw();}});
+
+/* ---------- install as an app (PWA) ---------- */
+const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+if(!standalone){
+  const iOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  $('installSec').hidden=false;
+  $('installNote').textContent=iOS
+    ?'Safari の共有ボタン(□に↑)から「ホーム画面に追加」を選ぶと、アプリのように全画面で開けます。電波がなくても使えます。'
+    :'ブラウザのメニューから「アプリをインストール」または「ホーム画面に追加」を選ぶと、アプリのように全画面で開けます。電波がなくても使えます。';
+  let deferred=null;
+  addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;$('bInstall').hidden=false;});
+  $('bInstall').onclick=async()=>{if(!deferred)return;deferred.prompt();try{await deferred.userChoice;}catch(_){}deferred=null;$('bInstall').hidden=true;};
+  addEventListener('appinstalled',()=>{$('installSec').hidden=true;});
+}
+if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
+  addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
 })();
 </script>
 </body>
