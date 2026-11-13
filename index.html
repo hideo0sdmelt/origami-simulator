@@ -435,38 +435,69 @@ function drawFacet(f,E,flip,V,C){
 function render(){
   const C={mat:css('--mat'),grid:css('--mat-grid'),major:css('--mat-major'),num:css('--mat-num'),crease:css('--crease')};
   ctx.setTransform(dpr,0,0,dpr,0,0);
+  drawScene(view,C);
+  const L=loupe();
+  if(L){
+    // magnifier: the spot under the finger, enlarged, shown away from the finger
+    const {Q,w,R}=L,s2=view.s*2.5,V2={s:s2,cx:w[0]-(Q[0]-cw/2)/s2,cy:w[1]-(Q[1]-ch/2)/s2};
+    ctx.save();ctx.beginPath();ctx.arc(Q[0],Q[1],R,0,Math.PI*2);ctx.clip();
+    drawScene(V2,C);
+    ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=1;ctx.beginPath();
+    ctx.moveTo(Q[0]-9,Q[1]);ctx.lineTo(Q[0]+9,Q[1]);ctx.moveTo(Q[0],Q[1]-9);ctx.lineTo(Q[0],Q[1]+9);ctx.stroke();
+    ctx.restore();
+    ctx.beginPath();ctx.arc(Q[0],Q[1],R,0,Math.PI*2);ctx.lineWidth=3;ctx.strokeStyle='#fff';ctx.stroke();
+    ctx.beginPath();ctx.arc(Q[0],Q[1],R+2,0,Math.PI*2);ctx.lineWidth=1;ctx.strokeStyle='rgba(0,0,0,.45)';ctx.stroke();
+  }
+}
+function loupe(){
+  if(!down||down.miss||pinch||anim||lastType==='mouse')return null;
+  let w=null;
+  if(mode==='drawing'){
+    if(tool==='line')w=line&&line.b;
+    else if(align&&align.kind==='point')w=align.B||align.A;
+    else if(down.cur)w=toW(down.cur);
+  }else if(mode==='pending'&&down.end)w=line[down.end];
+  if(!w)return null;
+  const P=down.cur||down.P,R=Math.min(60,Math.max(40,cw/6)),off=R+50;
+  let Q=[P[0],P[1]-off];
+  if(Q[1]-R<4)Q=[P[0]+(P[0]<cw/2?off:-off),P[1]];
+  Q=[Math.max(R+4,Math.min(cw-R-4,Q[0])),Math.max(R+4,Math.min(ch-R-4,Q[1]))];
+  return {Q,w,R};
+}
+function drawScene(V,C){
+  const toS=q=>toScr(q,V);
   drawMat(C);
-  if(anim){for(const it of anim.items(anim.t))drawFacet(it.f,it.E,it.flip,view,C);return;}
-  for(const f of facets)drawFacet(f,null,f.flip,view,C);
+  if(anim){for(const it of anim.items(anim.t))drawFacet(it.f,it.E,it.flip,V,C);return;}
+  for(const f of facets)drawFacet(f,null,f.flip,V,C);
   if(line&&(mode==='pending'||mode==='drawing')&&lineInfoValid(line)){
     // preview of the side that will move
     if(selSide&&(mode==='pending'||tool!=='line')){
       const sp=splitAll(facets,line,selSide);
       ctx.fillStyle='rgba(244,196,48,.22)';
-      for(const f of sp.move){pathScreen(worldPoly(f).map(q=>toScr(q)));ctx.fill();}
+      for(const f of sp.move){pathScreen(worldPoly(f).map(toS));ctx.fill();}
       const R=squash(sp.info.p,sp.info.n,2);
       ctx.setLineDash([5,4]);ctx.strokeStyle=C.crease;ctx.lineWidth=1.5;
-      for(const f of sp.move){pathScreen(worldPoly(f,R).map(q=>toScr(q)));ctx.stroke();}
+      for(const f of sp.move){pathScreen(worldPoly(f,R).map(toS));ctx.stroke();}
       ctx.setLineDash([]);
     }
-    const A=toScr(line.a),B=toScr(line.b),dx=B[0]-A[0],dy=B[1]-A[1],l=Math.hypot(dx,dy)||1,ext=Math.hypot(cw,ch);
+    const A=toS(line.a),B=toS(line.b),dx=B[0]-A[0],dy=B[1]-A[1],l=Math.hypot(dx,dy)||1,ext=Math.hypot(cw,ch);
     ctx.strokeStyle=C.crease;ctx.lineWidth=1;ctx.setLineDash([8,6]);ctx.globalAlpha=.55;
     ctx.beginPath();ctx.moveTo(A[0]-dx/l*ext,A[1]-dy/l*ext);ctx.lineTo(B[0]+dx/l*ext,B[1]+dy/l*ext);ctx.stroke();
     ctx.globalAlpha=1;ctx.setLineDash([]);ctx.lineWidth=2.5;
     ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);ctx.stroke();
     for(const P of [A,B]){ctx.beginPath();ctx.arc(P[0],P[1],7,0,Math.PI*2);ctx.fillStyle=C.crease;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='rgba(0,0,0,.45)';ctx.stroke();}
   }
-  const seg=(e,color,w,alpha)=>{const A=toScr(e.a),B=toScr(e.b);ctx.globalAlpha=alpha||1;ctx.lineCap='round';ctx.strokeStyle=color;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);ctx.stroke();ctx.globalAlpha=1;ctx.lineCap='butt';};
-  const dot=(w,color,r)=>{const P=toScr(w);ctx.beginPath();ctx.arc(P[0],P[1],r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='rgba(0,0,0,.45)';ctx.stroke();};
+  const seg=(e,color,w,alpha)=>{const A=toS(e.a),B=toS(e.b);ctx.globalAlpha=alpha||1;ctx.lineCap='round';ctx.strokeStyle=color;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);ctx.stroke();ctx.globalAlpha=1;ctx.lineCap='butt';};
+  const dot=(w,color,r)=>{const P=toS(w);ctx.beginPath();ctx.arc(P[0],P[1],r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='rgba(0,0,0,.45)';ctx.stroke();};
   if(align&&(mode==='drawing'||mode==='pending')){
     if(align.kind==='edge'){seg(align.e1,C.crease,5);if(align.e2)seg(align.e2,'#ffffff',5);}
     else{
-      if(align.B){const A=toScr(align.A),B=toScr(align.B);ctx.setLineDash([4,4]);ctx.strokeStyle='#ffffff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);ctx.stroke();ctx.setLineDash([]);dot(align.B,'#ffffff',6);}
+      if(align.B){const A=toS(align.A),B=toS(align.B);ctx.setLineDash([4,4]);ctx.strokeStyle='#ffffff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);ctx.stroke();ctx.setLineDash([]);dot(align.B,'#ffffff',6);}
       dot(align.A,C.crease,6);
     }
   }
   if(hoverEdge&&mode==='idle'&&tool==='edge')seg(hoverEdge,C.crease,5,.75);
-  if(snapMark){const P=toScr(snapMark);ctx.beginPath();ctx.arc(P[0],P[1],10,0,Math.PI*2);ctx.lineWidth=2;ctx.strokeStyle=C.crease;ctx.stroke();}
+  if(snapMark){const P=toS(snapMark);ctx.beginPath();ctx.arc(P[0],P[1],10,0,Math.PI*2);ctx.lineWidth=2;ctx.strokeStyle=C.crease;ctx.stroke();}
 }
 let raf=0;function draw(){if(!raf)raf=requestAnimationFrame(()=>{raf=0;render();});}
 function lineInfoValid(L){return Math.hypot(L.b[0]-L.a[0],L.b[1]-L.a[1])>1e-9;}
@@ -682,7 +713,7 @@ cv.addEventListener('pointerdown',e=>{
     if(touches.size>2||pinch)return;
   }
   try{cv.setPointerCapture(e.pointerId);}catch(_){}
-  down={P,moved:false,end:null,id:e.pointerId,miss:false};hoverEdge=null;
+  down={P,cur:P,moved:false,end:null,id:e.pointerId,miss:false};hoverEdge=null;
   if(mode==='pending'){
     const A=toScr(line.a),B=toScr(line.b),r=lastType==='mouse'?12:22;
     if(Math.hypot(P[0]-A[0],P[1]-A[1])<r)down.end='a';else if(Math.hypot(P[0]-B[0],P[1]-B[1])<r)down.end='b';
@@ -697,6 +728,7 @@ cv.addEventListener('pointermove',e=>{
     if(pinch){if(touches.size>=2){const {d,m}=pair();zoomAt(pinch.s*d/pinch.d,m,pinch.w,pinch.fit);}return;}
   }
   if(down&&down.id===e.pointerId){
+    down.cur=P;
     if(Math.hypot(P[0]-down.P[0],P[1]-down.P[1])>6)down.moved=true;
     if(down.miss){}
     else if(mode==='drawing'){gestureMove(P);}
