@@ -65,6 +65,15 @@ https://hideo0sdmelt.github.io/origami-simulator/
 - 戻す・進むでは、保存した状態に、いまの `G` を掛け直して表示する。こうすると、裏返したあとに戻しても向きはそのまま、折りだけが戻る
 - 裏返した状態(`G` の行列式が負)では、谷折りと山折りが入れ替わるので、保存するときと再生するときに入れ替える
 
+## 保存と復元
+
+- IndexedDB のデータベース `origami`、ストア `state` に、キー `current` で1件だけ持つ
+- 中身:`v`(形式の版、いまは1)、`front` / `back`(縮めた画像の PNG の Blob)、`rot`、`backMode`、`foldMode`、`opt`、`G`、`facets`(表示している状態)、`hist`、`redo`
+- `scheduleSave()` が0.2秒待ってから `saveNow()` を呼ぶ。`updateUI()`(折る・戻す・アニメーションの終わりなど)、`setImages()`、設定の変更から呼んでいる。アニメーション中は `facets` と `G` が食い違うので、終わるまで待つ
+- 画像の PNG 化は重いので、キャンバスごとに1回だけ作って `pngs`(WeakMap)に取っておく。復元した画像は、読み込んだ Blob をそのまま使う
+- 開いたときは、まずサンプルの紙を出してから `restore()` で非同期に戻す。復元が終わるまで(`saveReady` が false の間)は保存しない。こうしないと、起動時のサンプルの紙で保存が上書きされる
+- 形式を変えたら `SAVE_V` を上げる。版が違う保存は読まずに捨てる(次の保存で上書きされる)
+
 ## 描画
 
 - `<canvas>` 1枚に 2D で描く。`draw()` は requestAnimationFrame でまとめて1回だけ `render()` を呼ぶ

@@ -215,7 +215,7 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
         <button id="rotF" title="表の画像を時計回りに90°回す">表を回転 ⟳</button>
         <button id="rotB" title="裏の画像を時計回りに90°回す">裏を回転 ⟳</button>
       </div>
-      <p class="note" id="paperNote">いまはサンプルの紙です。画像を入れると置き換わります。画像はこのブラウザの中だけで使い、どこにも送りません。</p>
+      <p class="note" id="paperNote">いまはサンプルの紙です。画像を入れると置き換わります。画像と折った状態はこのブラウザの中だけに保存し、どこにも送りません。</p>
       <div class="row" style="margin-top:8px">
         <button id="bSwap">表と裏を入れ替え</button>
         <button id="bSample">サンプルに戻す</button>
@@ -350,19 +350,18 @@ function setImages(s,r){
   const [W,H]=sizeFor(s,r);
   if(paper&&(W!==paper.W||H!==paper.H)&&(hist.length||redo.length)
     &&!confirm('紙の縦横の大きさが変わるため、折った状態と「戻す」の履歴が消えます。続けますか?'))return false;
-  src=s;rot=r;showThumbs();rebuildPaper();return true;
+  src=s;rot=r;showThumbs();rebuildPaper();scheduleSave();return true;
+}
+function buildPaper(){
+  if(!src.front&&!src.back)return makeSample();
+  const [W,H]=sizeFor(src,rot);
+  return {W,H,
+    front:src.front?toCanvasRot(src.front,W,H,rot.front):blankCanvas(W,H,'#ffffff'),
+    back:src.back?toCanvasRot(src.back,W,H,rot.back):blankCanvas(W,H,'#ffffff')};
 }
 function rebuildPaper(){
   const prev=paper;
-  if(!src.front&&!src.back){paper=makeSample();}
-  else{
-    const [bw,bh]=dims(src.front?'front':'back');
-    const k=Math.min(1,MAXSIDE/Math.max(bw,bh));
-    const W=Math.round(bw*k),H=Math.round(bh*k);
-    paper={W,H,
-      front:src.front?toCanvasRot(src.front,W,H,rot.front):blankCanvas(W,H,'#ffffff'),
-      back:src.back?toCanvasRot(src.back,W,H,rot.back):blankCanvas(W,H,'#ffffff')};
-  }
+  paper=buildPaper();
   updatePaperNote();
   if(prev&&prev.W===paper.W&&prev.H===paper.H)draw();
   else resetFolds(false);
@@ -374,8 +373,8 @@ function rotateImage(which){
 }
 function updatePaperNote(){
   const el=$('paperNote');
-  if(!src.front&&!src.back){el.className='note';el.textContent='いまはサンプルの紙です。画像を入れると置き換わります。画像はこのブラウザの中だけで使い、どこにも送りません。';return;}
-  let msg='画像はこのブラウザの中だけで使い、どこにも送りません。', warn=false;
+  if(!src.front&&!src.back){el.className='note';el.textContent='いまはサンプルの紙です。画像を入れると置き換わります。画像と折った状態はこのブラウザの中だけに保存し、どこにも送りません。';return;}
+  let msg='画像と折った状態はこのブラウザの中だけに保存し、どこにも送りません。', warn=false;
   if(src.front&&src.back){
     const df=dims('front'),db=dims('back'),r1=df[0]/df[1],r2=db[0]/db[1];
     if(Math.abs(r1/r2-1)>0.03){msg='表と裏で縦横比が違うので、裏を表の形に合わせて伸ばしています。'+msg;warn=true;}
@@ -950,11 +949,12 @@ cv.addEventListener('gesturestart',e=>e.preventDefault());
 function updateUI(){
   $('bUndo').disabled=!hist.length;$('bRedo').disabled=!redo.length;
   $('stat').textContent=`手順 ${foldCount()} · 面 ${facets.length}`;
+  scheduleSave();
 }
 // folds in the current state: history entries back to the last "広げて最初から" (an entry without a fold)
 function foldCount(){let n=0;for(let i=hist.length-1;i>=0&&hist[i].fold;i--)n++;return n;}
 let toastT=0;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),1800);}
-function setFoldMode(m){foldMode=m;$('mValley').setAttribute('aria-pressed',m==='valley');$('mMountain').setAttribute('aria-pressed',m==='mountain');updateBar();updateHint();draw();}
+function setFoldMode(m){foldMode=m;$('mValley').setAttribute('aria-pressed',m==='valley');$('mMountain').setAttribute('aria-pressed',m==='mountain');updateBar();updateHint();draw();scheduleSave();}
 $('mValley').onclick=()=>setFoldMode('valley');
 $('mMountain').onclick=()=>setFoldMode('mountain');
 $('bUndo').onclick=undo;$('bRedo').onclick=redoF;
@@ -966,10 +966,10 @@ function setTool(t){if(anim)return;tool=t;line=null;hoverEdge=null;snapMark=null
   for(const [id,v] of [['tLine','line'],['tPoint','point'],['tEdge','edge']])$(id).setAttribute('aria-pressed',t===v);draw();}
 $('tLine').onclick=()=>setTool('line');$('tPoint').onclick=()=>setTool('point');$('tEdge').onclick=()=>setTool('edge');
 $('bReset').onclick=()=>{if(anim)return;resetFolds(true);updateUI();toast('広げました(「戻す」で折った状態に戻れます)');};
-$('backMode').onchange=e=>{backMode=e.target.value;draw();};
-$('optSee').onchange=e=>{opt.see=e.target.checked;draw();};
-$('optSnap').onchange=e=>{opt.snap=e.target.checked;snapMark=null;draw();};
-$('optFit').onchange=e=>{opt.fit=e.target.checked;if(!anim){setUserView(false);view=targetView(facets);draw();}};
+$('backMode').onchange=e=>{backMode=e.target.value;draw();scheduleSave();};
+$('optSee').onchange=e=>{opt.see=e.target.checked;draw();scheduleSave();};
+$('optSnap').onchange=e=>{opt.snap=e.target.checked;snapMark=null;draw();scheduleSave();};
+$('optFit').onchange=e=>{opt.fit=e.target.checked;if(!anim){setUserView(false);view=targetView(facets);draw();}scheduleSave();};
 $('bFit').onclick=()=>{if(anim)return;const cur=facets;animate(()=>cur.map(f=>({f,E:null,flip:f.flip})),cur,300);};
 
 /* phone sheet for the panel */
@@ -1058,8 +1058,73 @@ new ResizeObserver(resize).observe(cv);
 const mq=matchMedia('(prefers-color-scheme: dark)');mq.addEventListener?.('change',draw);
 new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 
+/* ---------- keep the work across reloads (IndexedDB) ----------
+   Phones drop pages that sit in the background, so the images, folds and history are saved here
+   (a moment after each change, and right away when the page is hidden) and put back on the next open.
+   Images are stored as PNG of the shrunk canvas; each canvas is encoded once. Nothing leaves the browser. */
+const SAVE_V=1;
+let dbp=null,saveReady=false,saveT=0;
+function db(){
+  if(!dbp)dbp=new Promise((res,rej)=>{
+    if(!window.indexedDB)return rej(new Error('no indexedDB'));
+    const r=indexedDB.open('origami',1);
+    r.onupgradeneeded=()=>r.result.createObjectStore('state');
+    r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);
+  });
+  return dbp;
+}
+function idb(mode,fn){
+  return db().then(d=>new Promise((res,rej)=>{
+    const t=d.transaction('state',mode),r=fn(t.objectStore('state'));
+    t.oncomplete=()=>res(r&&r.result);t.onerror=t.onabort=()=>rej(t.error);
+  }));
+}
+const pngs=new WeakMap();
+function pngOf(c){if(!c)return Promise.resolve(null);let p=pngs.get(c);if(!p){p=new Promise(r=>c.toBlob(r,'image/png'));pngs.set(c,p);}return p;}
+// Short delay: a save started from pagehide (reload, closing the tab) often does not finish, so don't wait long.
+function scheduleSave(){if(!saveReady)return;clearTimeout(saveT);saveT=setTimeout(saveNow,200);}
+async function saveNow(){
+  clearTimeout(saveT);
+  if(!saveReady)return;
+  if(anim){scheduleSave();return;} // facets and G only agree once the animation has ended
+  const s={v:SAVE_V,rot:{...rot},backMode,foldMode,opt:{...opt},G,facets,hist:hist.slice(),redo:redo.slice()};
+  try{
+    [s.front,s.back]=await Promise.all([pngOf(src.front),pngOf(src.back)]);
+    await idb('readwrite',st=>st.put(s,'current'));
+  }catch(_){}
+}
+function blobToCanvas(b){
+  return new Promise((res,rej)=>{
+    const u=URL.createObjectURL(b),i=new Image();
+    i.onload=()=>{URL.revokeObjectURL(u);const c=toCanvas(i,i.naturalWidth,i.naturalHeight);pngs.set(c,Promise.resolve(b));res(c);};
+    i.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('image'));};
+    i.src=u;
+  });
+}
+async function restore(){
+  try{
+    const s=await idb('readonly',st=>st.get('current'));
+    if(!s||s.v!==SAVE_V)return;
+    const [f,b]=await Promise.all([s.front?blobToCanvas(s.front):null,s.back?blobToCanvas(s.back):null]);
+    // if the person already started something while this was loading, keep what they did
+    if(anim||hist.length||redo.length||src.front||src.back)return;
+    src={front:f,back:b};rot=s.rot;
+    backMode=s.backMode;$('backMode').value=backMode;
+    opt=s.opt;$('optSee').checked=opt.see;$('optSnap').checked=opt.snap;$('optFit').checked=opt.fit;
+    setFoldMode(s.foldMode);
+    paper=buildPaper();updatePaperNote();showThumbs();
+    G=s.G;facets=s.facets;hist=s.hist;redo=s.redo;line=null;setMode('idle');
+    setUserView(false);view=targetView(facets);draw();updateUI();
+    if(f||b||hist.length)toast('前回の続きから再開しました');
+  }catch(_){}
+  finally{saveReady=true;scheduleSave();}
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveNow();});
+addEventListener('pagehide',()=>saveNow());
+
 rebuildPaper();
 setMode('idle');updateUI();
+restore();
 // redraw the sample once web fonts arrive so its letters use them
 document.fonts?.ready.then(()=>{if(!src.front&&!src.back){paper=makeSample();draw();}});
 
