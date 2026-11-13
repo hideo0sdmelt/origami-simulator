@@ -189,6 +189,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
           <button id="tPoint" aria-pressed="false" title="角や点を、別の点に重ねるように折る (2)"><span class="full">点を合わせる</span><span class="short">点合わせ</span></button>
           <button id="tEdge" aria-pressed="false" title="辺を、別の辺に重ねるように折る (3)"><span class="full">辺を合わせる</span><span class="short">辺合わせ</span></button>
           <button id="tPeek" aria-pressed="false" title="押した場所に重なっている紙を、上から順に見る (4)">重なり</button>
+          <button id="tCut" aria-pressed="false" title="線で全部の層をまとめて切り、残す側を選ぶ (5)">切る</button>
         </div>
       </div>
       <div class="hint" id="hint"></div>
@@ -202,7 +203,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <div class="act" id="act" hidden>
         <button id="bFold" hidden>折る</button>
         <button id="bCancel" hidden>線を消す</button>
-        <button id="bRefold" hidden title="直前の折りを、同じ線のまま谷折りと山折りを入れ替えて折り直す"></button>
+        <button id="bRefold" hidden></button>
+        <button id="bUnfold" hidden title="切った形のまま、紙を広げる">切ったまま広げる</button>
         <button id="bFit" hidden title="拡大をやめて、紙全体を表示する (0)">全体を表示</button>
       </div>
       <div class="bar" id="bar">
@@ -266,10 +268,11 @@ input[type=range]{width:100%;accent-color:var(--accent)}
         <li>2本指で拡大・移動。パソコンはホイールで拡大、Space を押しながら(または中ボタンで)ドラッグで移動。「全体を表示」で元に戻る</li>
         <li>間違えたら「戻す」。何度でも試せます</li>
       </ol>
+      <p class="note">「切る」は、線を引いて残したい側を選ぶと、重なった紙をまとめて切ります。「反対側を残す」で残す側を入れ替え、「切ったまま広げる」で切った形を広げて見られます。</p>
       <p class="note">「点を合わせる」は角をどこかに重ねる折り方、「辺を合わせる」は辺を別の辺に重ねる折り方です。例えば長方形の上の辺を右の辺へドラッグすると、先端に三角ができます。</p>
       <p class="note">折り線は、水平・垂直・45°の近くで吸い付きます<span class="fine">(Shift を押しながら引くと必ず揃う)</span>。</p>
       <p class="note">画像は紙の端ぴったりに切り抜いておくと、表と裏がきれいに重なります。</p>
-      <p class="note fine">キー:1・2・3 折り方の指定 / 4 重なり / V 谷折り / M 山折り / F 裏返す / R 90°回す / Enter 折る / 0 全体を表示 / Ctrl+Z・Backspace 戻す / Ctrl+Y 進む / Esc やめる / Space+ドラッグ 移動</p>
+      <p class="note fine">キー:1・2・3 折り方の指定 / 4 重なり / 5 切る / V 谷折り / M 山折り / F 裏返す / R 90°回す / Enter 折る / 0 全体を表示 / Ctrl+Z・Backspace 戻す / Ctrl+Y 進む / Esc やめる / Space+ドラッグ 移動</p>
     </section>
 
     <section id="installSec" hidden>
@@ -493,14 +496,17 @@ function drawMat(C){
   for(let x=step*5,i=1;x<cw;x+=step*5,i++)ctx.fillText(String(i),x+3,ch-4);
 }
 function pathScreen(pts){ctx.beginPath();pts.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.closePath();}
-function drawFacet(f,E,flip,V,C){
+// a: extra opacity, for pieces fading in or out (cuts, unfolding after a cut)
+function drawFacet(f,E,flip,V,C,a=1){
+  if(a<=0)return;
   const M=E?mul(E,f.M):f.M;
   const S=mul(viewMat(V),M);
   const pts=f.poly.map(p=>ap(S,p));
   ctx.save();
+  ctx.globalAlpha=a;
   if(!opt.see){ctx.shadowColor='rgba(0,0,0,.28)';ctx.shadowBlur=6;ctx.shadowOffsetY=1.5;pathScreen(pts);ctx.fillStyle='#fff';ctx.fill();ctx.shadowColor='transparent';}
   pathScreen(pts);ctx.clip();
-  ctx.globalAlpha=opt.see?opt.alpha:1;
+  ctx.globalAlpha=(opt.see?opt.alpha:1)*a;
   ctx.transform(S[0],S[1],S[2],S[3],S[4],S[5]);
   ctx.imageSmoothingQuality='high';
   if(!flip){ctx.drawImage(paper.front,0,0,paper.W,paper.H);}
@@ -509,7 +515,7 @@ function drawFacet(f,E,flip,V,C){
     ctx.drawImage(paper.back,0,0,paper.W,paper.H);
   }
   ctx.restore();
-  pathScreen(pts);ctx.lineWidth=1;ctx.strokeStyle=opt.see?'rgba(0,0,0,.55)':'rgba(0,0,0,.3)';ctx.stroke();
+  ctx.globalAlpha=a;pathScreen(pts);ctx.lineWidth=1;ctx.strokeStyle=opt.see?'rgba(0,0,0,.55)':'rgba(0,0,0,.3)';ctx.stroke();ctx.globalAlpha=1;
 }
 function render(){
   const C={mat:css('--mat'),grid:css('--mat-grid'),major:css('--mat-major'),num:css('--mat-num'),crease:css('--crease')};
@@ -563,7 +569,7 @@ function loupe(){
   if(!down||down.miss||pinch||anim||lastType==='mouse')return null;
   let w=null;
   if(mode==='drawing'){
-    if(tool==='line')w=line&&line.b;
+    if(lineTool())w=line&&line.b;
     else if(align&&align.kind==='point')w=align.B||align.A;
     else if(down.cur)w=toW(down.cur);
   }else if(mode==='pending'&&down.end)w=line[down.end];
@@ -578,11 +584,18 @@ function loupe(){
 function drawScene(V,C){
   const toS=q=>toScr(q,V);
   drawMat(C);
-  if(anim){for(const it of anim.items(anim.t))drawFacet(it.f,it.E,it.flip,V,C);return;}
+  if(anim){for(const it of anim.items(anim.t))drawFacet(it.f,it.E,it.flip,V,C,it.a);return;}
   for(const f of facets)drawFacet(f,null,f.flip,V,C);
+  const cut=tool==='cut';
   if(line&&(mode==='pending'||mode==='drawing')&&lineInfoValid(line)){
+    if(cut&&selSide&&mode==='pending'){
+      // preview of the cut: the side that goes away is darkened
+      const sp=splitAll(facets,line,selSide);
+      ctx.fillStyle='rgba(10,14,12,.55)';
+      for(const f of sp.keep){pathScreen(worldPoly(f).map(toS));ctx.fill();}
+    }
     // preview of the side that will move
-    if(selSide&&(mode==='pending'||tool!=='line')){
+    else if(!cut&&selSide&&(mode==='pending'||tool!=='line')){
       const sp=splitAll(facets,line,selSide);
       ctx.fillStyle='rgba(244,196,48,.22)';
       for(const f of sp.move){pathScreen(worldPoly(f).map(toS));ctx.fill();}
@@ -596,12 +609,13 @@ function drawScene(V,C){
     ctx.beginPath();ctx.moveTo(A[0]-dx/l*ext,A[1]-dy/l*ext);ctx.lineTo(B[0]+dx/l*ext,B[1]+dy/l*ext);ctx.stroke();
     // the crease itself, in the origami-diagram style: valley = dashed, mountain = dash-dot.
     // Each dash gets a dark outline (same pattern underneath, wider) so the gaps stay open and the pattern reads on light paper.
-    ctx.globalAlpha=1;ctx.setLineDash(foldMode==='valley'?[12,7]:[16,6,3,6]);
+    // a cut is a solid line, as in origami diagrams
+    ctx.globalAlpha=1;ctx.setLineDash(cut?[]:foldMode==='valley'?[12,7]:[16,6,3,6]);
     for(const [w,c] of [[5,'rgba(0,0,0,.6)'],[3,C.crease]]){ctx.lineWidth=w;ctx.strokeStyle=c;ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);ctx.stroke();}
     ctx.setLineDash([]);
     if(mode==='pending'){
       // label beside the middle of the line, so the chosen fold is visible right where you look
-      const t=foldMode==='valley'?'谷折り':'山折り',nx=-dy/l,ny=dx/l;
+      const t=cut?'切る':foldMode==='valley'?'谷折り':'山折り',nx=-dy/l,ny=dx/l;
       ctx.font='bold 12px "Zen Kaku Gothic New",sans-serif';
       const w=ctx.measureText(t).width+14,h=20;
       let x=(A[0]+B[0])/2+nx*20-w/2,y=(A[1]+B[1])/2+ny*20-h/2;
@@ -676,7 +690,46 @@ function foldItems(sp,mode){
    stored without G (line, a point on the moving side, valley/mountain), so undo/redo can replay it. */
 function pushHist(fold){hist.push({base:fromDisp(facets),fold:fold||null});redo=[];}
 const swapMode=m=>m==='valley'?'mountain':'valley';
+/* Cuts: fold.kind 'cut' stores the line and a point on the side that stays (ref), without G.
+   'unfold' marks "切ったまま広げる": the pieces that are left, laid out flat where they were on the sheet. */
+// the cut-off pieces slide away from the line and fade; sp.move is the side that stays
+function cutItems(sp,sigma){
+  const d=0.06*Math.max(paper.W,paper.H),dx=-sp.info.n[0]*sigma*d,dy=-sp.info.n[1]*sigma*d;
+  return t=>sp.move.map(f=>({f,E:null,flip:f.flip})).concat(sp.keep.map(f=>({f,E:[1,0,0,1,dx*t,dy*t],flip:f.flip,a:1-t})));
+}
+const fadeItems=(a,b)=>t=>a.map(f=>({f,E:null,flip:f.flip,a:1-t})).concat(b.map(f=>({f,E:null,flip:f.flip,a:t})));
+function cutSplit(fold,list){
+  const L={a:ap(G,fold.a),b:ap(G,fold.b)},info=lineInfo(L),sigma=Math.sign(sideOf(info,ap(G,fold.ref)))||1;
+  return {sp:splitAll(list,L,sigma),sigma};
+}
+function doCut(sigma){
+  const sp=splitAll(facets,line,sigma);
+  if(!sp.move.length){toast('その側には紙がありません');return;}
+  if(!sp.keep.length){toast('線が紙にかかっていません');return;}
+  const Gi=inv(G),ref=[line.a[0]+sp.info.n[0]*sigma*10,line.a[1]+sp.info.n[1]*sigma*10];
+  pushHist({kind:'cut',a:ap(Gi,line.a),b:ap(Gi,line.b),ref:ap(Gi,ref)});
+  line=null;setMode('idle');setRefold(true);
+  animate(cutItems(sp,sigma),sp.move,420);
+}
+// the paper has been cut and is still folded: offer to open it up with the cuts kept
+function unfoldable(){
+  if(!paper||!facets.length)return false;
+  const Gi=inv(G);let a=0,folded=false;
+  for(const f of facets){a+=area(f.poly);const M=mul(Gi,f.M);if(M.some((v,i)=>Math.abs(v-I[i])>1e-6))folded=true;}
+  return folded&&a<paper.W*paper.H*(1-1e-6);
+}
+function unfold(){
+  if(anim||!unfoldable())return;
+  const next=toDisp(fromDisp(facets).map(f=>({poly:f.poly,M:I,flip:false})),G),cur=facets;
+  pushHist({kind:'unfold'});line=null;setMode('idle');
+  animate(fadeItems(cur,next),next,480);
+}
 function playFold(fold,unfolded,next,reverse){
+  if(fold.kind==='unfold'){animate(fadeItems(facets,next),next,480);return;}
+  if(fold.kind==='cut'){
+    const {sp,sigma}=cutSplit(fold,unfolded),f=cutItems(sp,sigma);
+    animate(reverse?t=>f(1-t):f,next,reverse?360:420);return;
+  }
   const L={a:ap(G,fold.a),b:ap(G,fold.b)},info=lineInfo(L);
   const sigma=Math.sign(sideOf(info,ap(G,fold.ref)))||1;
   const m=det(G)<0?swapMode(fold.mode):fold.mode;
@@ -685,6 +738,7 @@ function playFold(fold,unfolded,next,reverse){
 }
 function doFold(sigma){
   if(!sigma||!line)return;
+  if(tool==='cut'){doCut(sigma);return;}
   const sp=splitAll(facets,line,sigma);
   if(!sp.move.length){toast('その側には紙がありません');return;}
   const Gi=inv(G),ref=[line.a[0]+sp.info.n[0]*sigma*10,line.a[1]+sp.info.n[1]*sigma*10];
@@ -701,6 +755,17 @@ function lastFoldMode(){const f=hist[hist.length-1].fold;return det(G)<0?swapMod
 function refold(){
   if(anim||!refoldable||!hist.length||!hist[hist.length-1].fold)return;
   const e=hist[hist.length-1],fold=e.fold;
+  if(fold.kind==='unfold')return;
+  if(fold.kind==='cut'){
+    // keep the other side: bring the cut-off pieces back, and let the kept ones go
+    const base=toDisp(e.base,G),{sp,sigma}=cutSplit(fold,base);
+    const info=lineInfo({a:fold.a,b:fold.b});
+    e.fold={...fold,ref:ap(squash(info.p,info.n,2),fold.ref)};
+    const fo=cutItems(sp,sigma),fn=cutItems({keep:sp.move,move:sp.keep,info:sp.info},-sigma);
+    setRefold(true);
+    animate(t=>t<.5?fo(1-2*t):fn(2*t-1),sp.keep,700);
+    return;
+  }
   const L={a:ap(G,fold.a),b:ap(G,fold.b)},info=lineInfo(L);
   const sigma=Math.sign(sideOf(info,ap(G,fold.ref)))||1;
   const oldM=lastFoldMode(),newM=swapMode(oldM);
@@ -743,25 +808,35 @@ function redoF(){
 /* ---------- pointer interaction ---------- */
 let mode='idle', line=null, down=null, selSide=0, snapMark=null, lastType=matchMedia('(pointer: coarse)').matches?'touch':'mouse';
 let tool='line', align=null, lockSide=false, hoverEdge=null;
+const lineTool=()=>tool==='line'||tool==='cut'; // tools where a line is drawn by hand
 function setMode(m){mode=m;refoldable=false;if(m!=='pending'){selSide=0;lockSide=false;}if(m==='idle')align=null;updateBar();updateHint();}
 const modeName=()=>foldMode==='valley'?'谷折り':'山折り';
 function updateBar(){
   $('bCancel').hidden=mode!=='pending';$('bFold').hidden=!(mode==='pending'&&lockSide&&selSide);
   $('bFold').textContent=modeName()+'で折る';
   const rf=$('bRefold');rf.hidden=!(refoldable&&mode==='idle');
-  if(!rf.hidden)rf.textContent=(lastFoldMode()==='valley'?'山折り':'谷折り')+'に折り直す';
+  if(!rf.hidden){
+    const cutLast=hist[hist.length-1].fold.kind==='cut';
+    rf.textContent=cutLast?'反対側を残す':(lastFoldMode()==='valley'?'山折り':'谷折り')+'に折り直す';
+    rf.title=cutLast?'直前に切った線のまま、切り落とした側を残す':'直前の折りを、同じ線のまま谷折りと山折りを入れ替えて折り直す';
+  }
+  $('bUnfold').hidden=!(mode==='idle'&&unfoldable());
   updateAct();
 }
-function updateAct(){$('act').hidden=$('bFold').hidden&&$('bCancel').hidden&&$('bRefold').hidden&&$('bFit').hidden;}
+function updateAct(){$('act').hidden=$('bFold').hidden&&$('bCancel').hidden&&$('bRefold').hidden&&$('bUnfold').hidden&&$('bFit').hidden;}
 function updateHint(){
   const h=$('hint');
   if(mode==='idle'&&tool==='peek')h.innerHTML=peekAt
     ?(lastType==='mouse'?'<b>ドラッグ</b>で見る場所を動かす(紙の外をクリックで閉じる)':'<b>ドラッグ</b>で見る場所を動かす(紙の外をタップで閉じる)')
     :(lastType==='mouse'?'紙の上を<b>クリック</b>すると、そこに重なっている紙を上から順に見られる':'紙の上を<b>タップ</b>すると、そこに重なっている紙を上から順に見られる');
   else if(mode==='idle')h.innerHTML=tool==='line'?'紙の上を<b>ドラッグ</b>して折り線を引く'
+    :tool==='cut'?'紙の上を<b>ドラッグ</b>して切る線を引く'
     :tool==='point'?'動かしたい<b>角や点</b>から、重ねたい場所へ<b>ドラッグ</b>'
     :'動かしたい<b>辺</b>から、重ねたい<b>辺</b>へ<b>ドラッグ</b>';
-  else if(mode==='drawing')h.innerHTML=tool==='line'?(lastType==='mouse'?'離すと折り線が決まります(Shift で水平・垂直・45°に揃える)':'指を離すと折り線が決まります'):'離すと折る位置が決まります(黄色が動く側)';
+  else if(mode==='drawing')h.innerHTML=lineTool()?(lastType==='mouse'?`離すと${tool==='cut'?'切る線':'折り線'}が決まります(Shift で水平・垂直・45°に揃える)`:`指を離すと${tool==='cut'?'切る線':'折り線'}が決まります`):'離すと折る位置が決まります(黄色が動く側)';
+  else if(tool==='cut')h.innerHTML=lastType==='mouse'
+    ?'<b>残したい側</b>をクリックで<b>切る</b>(暗い側が落ちる / 線の端の●で微調整 / Esc でやめる)'
+    :(selSide?'もう一度タップで<b>切る</b>(暗い側が落ちる。反対側をタップすると切り替え)':'<b>残したい側をタップ</b>(線の端の●で微調整)');
   else if(lockSide)h.innerHTML=lastType==='mouse'
     ?`紙をクリックで<b>${modeName()}</b>(紙の外をクリックか Esc でやめる)`
     :`紙をタップで<b>${modeName()}</b>(紙の外をタップでやめる)`;
@@ -856,7 +931,7 @@ function computeAlign(){
   line=L;selSide=Math.sign(s);
 }
 function startGesture(P){
-  if(tool==='line'){const w=snap(P);line={a:w,b:w.slice()};align=null;setMode('drawing');return true;}
+  if(lineTool()){const w=snap(P);line={a:w,b:w.slice()};align=null;setMode('drawing');return true;}
   if(tool==='point'){const A=snap(P);line=null;setMode('drawing');align={kind:'point',A,B:null};return true;}
   const e1=pickEdge(P,null);
   if(!e1)return false;
@@ -883,7 +958,7 @@ function snapEnd(anchor,P,shift){
   snapMark=null;angleMark={p:r.p,k:r.k};return r.p;
 }
 function gestureMove(P,shift){
-  if(tool==='line'){line.b=snapEnd(line.a,P,shift);return;}
+  if(lineTool()){line.b=snapEnd(line.a,P,shift);return;}
   if(align.kind==='point')align.B=snap(P);
   else{align.e2=pickEdge(P,align.e1);snapMark=null;}
   computeAlign();
@@ -963,7 +1038,7 @@ function endPointer(e,cancel){
   }
   const P=evP(e);
   if(mode==='drawing'){
-    if(tool==='line'){
+    if(lineTool()){
       const A=toScr(line.a),B=toScr(line.b);
       if(cancel||Math.hypot(B[0]-A[0],B[1]-A[1])<12){line=null;setMode('idle');}
       else setMode('pending');
@@ -976,7 +1051,7 @@ function endPointer(e,cancel){
     if(lockSide){if(onPaper(P))doFold(selSide);else{line=null;setMode('idle');}}
     else{
       const s=sideAt(P);
-      if(!s)toast(lastType==='mouse'?'線から少し離れて、折りたい側をクリックしてください':'線から少し離れて、折りたい側をタップしてください');
+      if(!s)toast(`線から少し離れて、${tool==='cut'?'残したい':'折りたい'}側を${lastType==='mouse'?'クリック':'タップ'}してください`);
       else if(lastType==='mouse'||s===selSide)doFold(s);else{selSide=s;updateHint();}
     }
   }
@@ -1009,10 +1084,12 @@ cv.addEventListener('gesturestart',e=>e.preventDefault());
 function updateUI(){
   $('bUndo').disabled=!hist.length;$('bRedo').disabled=!redo.length;
   $('stat').textContent=`手順 ${foldCount()} · 面 ${facets.length}`;
+  updateBar();
   scheduleSave();
 }
-// folds in the current state: history entries back to the last "広げて最初から" (an entry without a fold)
-function foldCount(){let n=0;for(let i=hist.length-1;i>=0&&hist[i].fold;i--)n++;return n;}
+// folds and cuts in the current state: history entries back to the last "広げて最初から" (an entry without a fold)
+// or "切ったまま広げる"
+function foldCount(){let n=0;for(let i=hist.length-1;i>=0&&hist[i].fold&&hist[i].fold.kind!=='unfold';i--)n++;return n;}
 let toastT=0;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),1800);}
 function setFoldMode(m){foldMode=m;$('mValley').setAttribute('aria-pressed',m==='valley');$('mMountain').setAttribute('aria-pressed',m==='mountain');updateBar();updateHint();draw();scheduleSave();}
 $('mValley').onclick=()=>setFoldMode('valley');
@@ -1022,9 +1099,10 @@ $('bTurn').onclick=turnOver;$('bRot').onclick=rotate90;
 $('bCancel').onclick=()=>{line=null;setMode('idle');draw();};
 $('bFold').onclick=()=>{if(mode==='pending'&&selSide)doFold(selSide);};
 $('bRefold').onclick=refold;
+$('bUnfold').onclick=unfold;
 function setTool(t){if(anim)return;tool=t;line=null;hoverEdge=null;snapMark=null;clearPeek();setMode('idle');
-  for(const [id,v] of [['tLine','line'],['tPoint','point'],['tEdge','edge'],['tPeek','peek']])$(id).setAttribute('aria-pressed',t===v);draw();}
-$('tLine').onclick=()=>setTool('line');$('tPoint').onclick=()=>setTool('point');$('tEdge').onclick=()=>setTool('edge');$('tPeek').onclick=()=>setTool('peek');
+  for(const [id,v] of [['tLine','line'],['tPoint','point'],['tEdge','edge'],['tPeek','peek'],['tCut','cut']])$(id).setAttribute('aria-pressed',t===v);draw();}
+$('tLine').onclick=()=>setTool('line');$('tPoint').onclick=()=>setTool('point');$('tEdge').onclick=()=>setTool('edge');$('tPeek').onclick=()=>setTool('peek');$('tCut').onclick=()=>setTool('cut');
 $('bPeekClose').onclick=()=>{clearPeek();draw();};
 $('bReset').onclick=()=>{if(anim)return;resetFolds(true);updateUI();toast('広げました(「戻す」で折った状態に戻れます)');};
 $('backMode').onchange=e=>{backMode=e.target.value;renderPeek();draw();scheduleSave();};
@@ -1100,7 +1178,7 @@ document.addEventListener('keydown',e=>{
   else if(!e.ctrlKey&&!e.metaKey&&!e.altKey){
     // single-key shortcuts (desktop). Enter is left to a focused button.
     const k=e.key.toLowerCase(),free=e.target===document.body||e.target===cv;let hit=true;
-    if(k==='1')setTool('line');else if(k==='2')setTool('point');else if(k==='3')setTool('edge');else if(k==='4')setTool('peek');
+    if(k==='1')setTool('line');else if(k==='2')setTool('point');else if(k==='3')setTool('edge');else if(k==='4')setTool('peek');else if(k==='5')setTool('cut');
     else if(k==='v')setFoldMode('valley');else if(k==='m')setFoldMode('mountain');
     else if(k==='f'){if(!e.repeat)turnOver();}else if(k==='r'){if(!e.repeat)rotate90();}
     else if(k==='enter'&&free&&!$('bFold').hidden)$('bFold').click();
