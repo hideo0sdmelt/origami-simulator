@@ -148,6 +148,13 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
   .bar{width:auto;gap:6px}
 }
 @media (max-width:380px){.stat{display:none}#bMenu{margin-left:auto}}
+/* Very narrow phones (under 360px): tighten so the tool row and the bottom bar stay on one line. */
+@media (max-width:359px){
+  .tools .seg button{padding:6px 7px;font-size:12px}
+  .bar{gap:2px;padding:4px}
+  .bar button{padding:6px 5px;font-size:13px;min-width:40px}
+  .bar .seg button{min-width:0}
+}
 @media (prefers-reduced-motion:reduce){.toast,.panel,.panel.open{transition:none}}
 </style>
 </head>
