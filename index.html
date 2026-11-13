@@ -90,6 +90,15 @@ select{font:inherit;font-size:13px;color:var(--fg);background:var(--panel);borde
 ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:column;gap:4px}
 .tools{max-width:100%}
 .tools .seg{background:var(--panel);pointer-events:auto;max-width:100%;flex-wrap:wrap}
+.peek{display:flex;align-items:stretch;gap:8px;max-width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 8px;box-shadow:0 4px 18px rgba(0,0,0,.18)}
+.peekHead{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;font-size:12px;font-weight:700;line-height:1.3;white-space:nowrap}
+.peekHead small{font-weight:400;color:var(--muted)}
+.peekHead button{padding:2px 8px}
+.peekList{display:flex;gap:6px;overflow-x:auto;min-width:0}
+.layer{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;font-variant-numeric:tabular-nums;flex:none}
+.layer canvas{width:64px;height:64px;border-radius:6px;border:1px solid var(--line);display:block}
+.layer .bk{color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--accent)}
 .toast{position:absolute;left:50%;top:96px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:6px 12px;border-radius:7px;font-size:13px;pointer-events:none;opacity:0;transition:opacity .2s;max-width:calc(100% - 24px);text-align:center}
 .toast.on{opacity:1}
 .danger{color:var(--warn)}
@@ -98,6 +107,7 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
 @media (pointer:coarse){.coarse{display:inline}.fine{display:none}}
 /* Phone-only pieces stay out of the desktop layout. */
 .mOnly{display:none!important}
+.tools .short{display:none}
 .sheetHead{display:none}
 .scrim{display:none}
 
@@ -116,6 +126,9 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
   .top{left:8px;right:8px;top:8px}
   .hint{font-size:12.5px}
   .tools .seg button{min-height:40px;padding:6px 10px}
+  /* four tools on one row: shorter labels on phones */
+  .tools .full{display:none}
+  .tools .short{display:inline}
   .dock{left:6px;right:6px;bottom:6px}
   .bar{width:100%;flex-wrap:nowrap;justify-content:space-between;gap:3px;padding:5px}
   .bar button{min-height:44px;min-width:44px;padding:6px 8px;font-size:14px}
@@ -172,15 +185,20 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
     <div class="top" id="top">
       <div class="tools" id="tools">
         <div class="seg" role="group" aria-label="折り方の指定">
-          <button id="tLine" aria-pressed="true" title="折り線を直接引く (1)">折り線を引く</button>
-          <button id="tPoint" aria-pressed="false" title="角や点を、別の点に重ねるように折る (2)">点を合わせる</button>
-          <button id="tEdge" aria-pressed="false" title="辺を、別の辺に重ねるように折る (3)">辺を合わせる</button>
+          <button id="tLine" aria-pressed="true" title="折り線を直接引く (1)"><span class="full">折り線を引く</span><span class="short">線を引く</span></button>
+          <button id="tPoint" aria-pressed="false" title="角や点を、別の点に重ねるように折る (2)"><span class="full">点を合わせる</span><span class="short">点合わせ</span></button>
+          <button id="tEdge" aria-pressed="false" title="辺を、別の辺に重ねるように折る (3)"><span class="full">辺を合わせる</span><span class="short">辺合わせ</span></button>
+          <button id="tPeek" aria-pressed="false" title="押した場所に重なっている紙を、上から順に見る (4)">重なり</button>
         </div>
       </div>
       <div class="hint" id="hint"></div>
     </div>
     <div class="toast" id="toast" role="status"></div>
     <div class="dock">
+      <div class="peek" id="peek" hidden>
+        <div class="peekHead"><span>この場所の<br>重なり<br><small>上から順に</small></span><button id="bPeekClose" aria-label="重なりの表示を閉じる">×</button></div>
+        <div class="peekList" id="peekList"></div>
+      </div>
       <div class="act" id="act" hidden>
         <button id="bFold" hidden>折る</button>
         <button id="bCancel" hidden>線を消す</button>
@@ -234,6 +252,7 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
     <section>
       <h2>表示</h2>
       <label class="chk"><input type="checkbox" id="optSee"> 透かして見る(下の層がうっすら見える)</label>
+      <label class="chk" id="seeRow" hidden>濃さ <input type="range" id="optAlpha" min="20" max="90" step="5" value="60" aria-label="透かすときの紙の濃さ"></label>
       <label class="chk"><input type="checkbox" id="optSnap" checked> 角・辺の中点・辺にスナップ</label>
       <label class="chk"><input type="checkbox" id="optFit"> 折った紙を画面いっぱいに拡大</label>
     </section>
@@ -250,7 +269,7 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
       <p class="note">「点を合わせる」は角をどこかに重ねる折り方、「辺を合わせる」は辺を別の辺に重ねる折り方です。例えば長方形の上の辺を右の辺へドラッグすると、先端に三角ができます。</p>
       <p class="note">折り線は、水平・垂直・45°の近くで吸い付きます<span class="fine">(Shift を押しながら引くと必ず揃う)</span>。</p>
       <p class="note">画像は紙の端ぴったりに切り抜いておくと、表と裏がきれいに重なります。</p>
-      <p class="note fine">キー:1・2・3 折り方の指定 / V 谷折り / M 山折り / F 裏返す / R 90°回す / Enter 折る / 0 全体を表示 / Ctrl+Z 戻す / Ctrl+Y 進む / Esc やめる / Space+ドラッグ 移動</p>
+      <p class="note fine">キー:1・2・3 折り方の指定 / 4 重なり / V 谷折り / M 山折り / F 裏返す / R 90°回す / Enter 折る / 0 全体を表示 / Ctrl+Z 戻す / Ctrl+Y 進む / Esc やめる / Space+ドラッグ 移動</p>
     </section>
 
     <section id="installSec" hidden>
@@ -294,7 +313,8 @@ let paper=null;
 let src={front:null,back:null};
 let facets=[], hist=[], redo=[];
 let foldMode='valley', backMode='h';
-let opt={see:false,snap:true,fit:false};
+const OPT0={see:false,alpha:0.6,snap:true,fit:false};
+let opt={...OPT0};
 
 function blankCanvas(w,h,color){const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');g.fillStyle=color;g.fillRect(0,0,w,h);return c;}
 function toCanvas(img,w,h){const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(img,0,0,w,h);return c;}
@@ -363,7 +383,7 @@ function rebuildPaper(){
   const prev=paper;
   paper=buildPaper();
   updatePaperNote();
-  if(prev&&prev.W===paper.W&&prev.H===paper.H)draw();
+  if(prev&&prev.W===paper.W&&prev.H===paper.H){renderPeek();draw();}
   else resetFolds(false);
 }
 function rotateImage(which){
@@ -386,7 +406,7 @@ function resetFolds(keepHistory){
   const {W,H}=paper;
   const next=[{poly:[[0,0],[W,0],[W,H],[0,H]],M:I,flip:false}];
   if(keepHistory){pushHist();}else{hist=[];redo=[];}
-  G=I;facets=next;line=null;setMode('idle');
+  clearPeek();G=I;facets=next;line=null;setMode('idle');
   setUserView(false);view=targetView(facets);draw();updateUI();
 }
 
@@ -480,7 +500,7 @@ function drawFacet(f,E,flip,V,C){
   ctx.save();
   if(!opt.see){ctx.shadowColor='rgba(0,0,0,.28)';ctx.shadowBlur=6;ctx.shadowOffsetY=1.5;pathScreen(pts);ctx.fillStyle='#fff';ctx.fill();ctx.shadowColor='transparent';}
   pathScreen(pts);ctx.clip();
-  ctx.globalAlpha=opt.see?0.6:1;
+  ctx.globalAlpha=opt.see?opt.alpha:1;
   ctx.transform(S[0],S[1],S[2],S[3],S[4],S[5]);
   ctx.imageSmoothingQuality='high';
   if(!flip){ctx.drawImage(paper.front,0,0,paper.W,paper.H);}
@@ -508,6 +528,37 @@ function render(){
     ctx.beginPath();ctx.arc(Q[0],Q[1],R+2,0,Math.PI*2);ctx.lineWidth=1;ctx.strokeStyle='rgba(0,0,0,.45)';ctx.stroke();
   }
 }
+/* ---------- layer viewer ("重なり" tool) ----------
+   Shows every layer of paper under one point, top to bottom, each drawn on its own,
+   so letters hidden under other layers can be read (or "pierced with a pencil"). */
+let peekAt=null,peekLayers=[];
+function setPeek(w){peekAt=w;renderPeek();updateHint();draw();}
+function clearPeek(){if(!peekAt&&$('peek').hidden)return;peekAt=null;peekLayers=[];$('peek').hidden=true;$('peekList').replaceChildren();updateHint();}
+function renderPeek(){
+  if(!peekAt)return;
+  peekLayers=[];for(let k=facets.length-1;k>=0;k--)if(inPoly(peekAt,worldPoly(facets[k])))peekLayers.push(facets[k]);
+  const el=$('peek'),list=$('peekList');
+  if(!peekLayers.length){el.hidden=true;list.replaceChildren();return;}
+  // world -> thumbnail pixels, centred on the point; shows about 140 screen px around it
+  const size=64,r=window.devicePixelRatio||1,k=size/(140/view.s),mat=css('--mat');
+  const T=[k*r,0,0,k*r,(size/2-k*peekAt[0])*r,(size/2-k*peekAt[1])*r];
+  list.replaceChildren(...peekLayers.map((f,i)=>{
+    const c=document.createElement('canvas');c.width=c.height=size*r;
+    const g=c.getContext('2d');g.fillStyle=mat;g.fillRect(0,0,c.width,c.height);
+    const S=mul(T,f.M),pts=f.poly.map(p=>ap(S,p));
+    g.save();g.beginPath();pts.forEach((q,j)=>j?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1]));g.closePath();g.clip();
+    g.transform(S[0],S[1],S[2],S[3],S[4],S[5]);g.imageSmoothingQuality='high';
+    if(!f.flip)g.drawImage(paper.front,0,0,paper.W,paper.H);
+    else{if(backMode==='h')g.transform(-1,0,0,1,paper.W,0);else g.transform(1,0,0,-1,0,paper.H);g.drawImage(paper.back,0,0,paper.W,paper.H);}
+    g.restore();
+    const m=size*r/2;g.strokeStyle='#e5484d';g.lineWidth=1.5*r;g.beginPath();g.arc(m,m,5*r,0,Math.PI*2);g.stroke(); // the exact spot
+    c.setAttribute('role','img');c.setAttribute('aria-label',`上から${i+1}枚目(${f.flip?'裏':'表'})`);
+    const d=document.createElement('div');d.className='layer';
+    const t=document.createElement('span');t.innerHTML=`${i+1} <span class="${f.flip?'bk':''}">${f.flip?'裏':'表'}</span>`;
+    d.append(c,t);return d;
+  }));
+  el.hidden=false;
+}
 function loupe(){
   if(!down||down.miss||pinch||anim||lastType==='mouse')return null;
   let w=null;
@@ -516,6 +567,7 @@ function loupe(){
     else if(align&&align.kind==='point')w=align.B||align.A;
     else if(down.cur)w=toW(down.cur);
   }else if(mode==='pending'&&down.end)w=line[down.end];
+  else if(down.peek)w=peekAt;
   if(!w)return null;
   const P=down.cur||down.P,R=Math.min(60,Math.max(40,cw/6)),off=R+50;
   let Q=[P[0],P[1]-off];
@@ -579,6 +631,8 @@ function drawScene(V,C){
     ctx.fillStyle='rgba(0,0,0,.7)';ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,w,18,9):ctx.rect(x,y,w,18);ctx.fill();
     ctx.fillStyle='#fff';ctx.textBaseline='middle';ctx.fillText(t,x+6,y+10);ctx.textBaseline='alphabetic';
   }
+  if(peekAt&&peekLayers.length){const P=toS(peekAt);ctx.lineWidth=2.5;ctx.strokeStyle='#fff';ctx.beginPath();ctx.arc(P[0],P[1],8,0,Math.PI*2);ctx.stroke();
+    ctx.lineWidth=1.5;ctx.strokeStyle='#e5484d';ctx.beginPath();ctx.arc(P[0],P[1],8,0,Math.PI*2);ctx.moveTo(P[0]-13,P[1]);ctx.lineTo(P[0]+13,P[1]);ctx.moveTo(P[0],P[1]-13);ctx.lineTo(P[0],P[1]+13);ctx.stroke();}
   if(snapMark){const P=toS(snapMark);ctx.beginPath();ctx.arc(P[0],P[1],10,0,Math.PI*2);ctx.lineWidth=2;ctx.strokeStyle=C.crease;ctx.stroke();}
 }
 let raf=0;function draw(){if(!raf)raf=requestAnimationFrame(()=>{raf=0;render();});}
@@ -588,7 +642,7 @@ function lineInfoValid(L){return Math.hypot(L.b[0]-L.a[0],L.b[1]-L.a[1])>1e-9;}
 let anim=null;
 const reduce=matchMedia('(prefers-reduced-motion: reduce)');
 function animate(items,next,dur){
-  setUserView(false);
+  clearPeek();setUserView(false);
   const from={...view},to=targetView(next);
   if(reduce.matches||dur<=0){facets=next;view=to;draw();updateUI();return;}
   const t0=performance.now();
@@ -672,7 +726,7 @@ function rotate90(){
   const base=facets;
   animate(t=>base.map(f=>({f,E:rotAbout(c,Math.PI/2*t),flip:f.flip})),next,380);
 }
-function jumpTo(next){facets=next;setUserView(false);view=targetView(facets);draw();updateUI();}
+function jumpTo(next){clearPeek();facets=next;setUserView(false);view=targetView(facets);draw();updateUI();}
 function undo(){
   if(anim||!hist.length)return;
   const e=hist.pop();redo.push({base:fromDisp(facets),fold:e.fold});
@@ -701,7 +755,10 @@ function updateBar(){
 function updateAct(){$('act').hidden=$('bFold').hidden&&$('bCancel').hidden&&$('bRefold').hidden&&$('bFit').hidden;}
 function updateHint(){
   const h=$('hint');
-  if(mode==='idle')h.innerHTML=tool==='line'?'紙の上を<b>ドラッグ</b>して折り線を引く'
+  if(mode==='idle'&&tool==='peek')h.innerHTML=peekAt
+    ?(lastType==='mouse'?'<b>ドラッグ</b>で見る場所を動かす(紙の外をクリックで閉じる)':'<b>ドラッグ</b>で見る場所を動かす(紙の外をタップで閉じる)')
+    :(lastType==='mouse'?'紙の上を<b>クリック</b>すると、そこに重なっている紙を上から順に見られる':'紙の上を<b>タップ</b>すると、そこに重なっている紙を上から順に見られる');
+  else if(mode==='idle')h.innerHTML=tool==='line'?'紙の上を<b>ドラッグ</b>して折り線を引く'
     :tool==='point'?'動かしたい<b>角や点</b>から、重ねたい場所へ<b>ドラッグ</b>'
     :'動かしたい<b>辺</b>から、重ねたい<b>辺</b>へ<b>ドラッグ</b>';
   else if(mode==='drawing')h.innerHTML=tool==='line'?(lastType==='mouse'?'離すと折り線が決まります(Shift で水平・垂直・45°に揃える)':'指を離すと折り線が決まります'):'離すと折る位置が決まります(黄色が動く側)';
@@ -864,6 +921,7 @@ cv.addEventListener('pointerdown',e=>{
   }
   try{cv.setPointerCapture(e.pointerId);}catch(_){}
   down={P,cur:P,moved:false,end:null,id:e.pointerId,miss:false};hoverEdge=null;
+  if(tool==='peek'&&mode==='idle'){down.peek=true;setPeek(toW(P));return;}
   if(mode==='pending'){
     const A=toScr(line.a),B=toScr(line.b),r=lastType==='mouse'?12:22;
     if(Math.hypot(P[0]-A[0],P[1]-A[1])<r)down.end='a';else if(Math.hypot(P[0]-B[0],P[1]-B[1])<r)down.end='b';
@@ -882,6 +940,7 @@ cv.addEventListener('pointermove',e=>{
     down.cur=P;
     if(Math.hypot(P[0]-down.P[0],P[1]-down.P[1])>6)down.moved=true;
     if(down.miss){}
+    else if(down.peek){setPeek(toW(P));}
     else if(mode==='drawing'){gestureMove(P,e.shiftKey);}
     else if(mode==='pending'){
       if(down.end){line[down.end]=snapEnd(line[down.end==='a'?'b':'a'],P,e.shiftKey);}
@@ -889,7 +948,7 @@ cv.addEventListener('pointermove',e=>{
     }
   }else if(e.pointerType==='mouse'){
     if(mode==='pending'){if(!lockSide)selSide=sideAt(P);snapMark=null;}
-    else if(mode==='idle'){if(tool==='edge'){hoverEdge=pickEdge(P,null);snapMark=null;}else snap(P);}
+    else if(mode==='idle'){if(tool==='edge'){hoverEdge=pickEdge(P,null);snapMark=null;}else if(tool!=='peek')snap(P);}
   }
   draw();
 });
@@ -897,6 +956,7 @@ function endPointer(e,cancel){
   if(mpan&&mpan.id===e.pointerId){mpan=null;setCursor();return;}
   if(touches.delete(e.pointerId)&&pinch){if(touches.size<2)pinch=null;draw();return;}
   if(!down||down.id!==e.pointerId)return;
+  if(down.peek){if(!peekLayers.length)clearPeek();down=null;draw();return;}
   if(down.miss){
     if(!cancel&&tool==='edge')toast('紙の辺の近くからドラッグしてください');
     down=null;draw();return;
@@ -962,12 +1022,14 @@ $('bTurn').onclick=turnOver;$('bRot').onclick=rotate90;
 $('bCancel').onclick=()=>{line=null;setMode('idle');draw();};
 $('bFold').onclick=()=>{if(mode==='pending'&&selSide)doFold(selSide);};
 $('bRefold').onclick=refold;
-function setTool(t){if(anim)return;tool=t;line=null;hoverEdge=null;snapMark=null;setMode('idle');
-  for(const [id,v] of [['tLine','line'],['tPoint','point'],['tEdge','edge']])$(id).setAttribute('aria-pressed',t===v);draw();}
-$('tLine').onclick=()=>setTool('line');$('tPoint').onclick=()=>setTool('point');$('tEdge').onclick=()=>setTool('edge');
+function setTool(t){if(anim)return;tool=t;line=null;hoverEdge=null;snapMark=null;clearPeek();setMode('idle');
+  for(const [id,v] of [['tLine','line'],['tPoint','point'],['tEdge','edge'],['tPeek','peek']])$(id).setAttribute('aria-pressed',t===v);draw();}
+$('tLine').onclick=()=>setTool('line');$('tPoint').onclick=()=>setTool('point');$('tEdge').onclick=()=>setTool('edge');$('tPeek').onclick=()=>setTool('peek');
+$('bPeekClose').onclick=()=>{clearPeek();draw();};
 $('bReset').onclick=()=>{if(anim)return;resetFolds(true);updateUI();toast('広げました(「戻す」で折った状態に戻れます)');};
-$('backMode').onchange=e=>{backMode=e.target.value;draw();scheduleSave();};
-$('optSee').onchange=e=>{opt.see=e.target.checked;draw();scheduleSave();};
+$('backMode').onchange=e=>{backMode=e.target.value;renderPeek();draw();scheduleSave();};
+$('optSee').onchange=e=>{opt.see=e.target.checked;$('seeRow').hidden=!opt.see;draw();scheduleSave();};
+$('optAlpha').oninput=e=>{opt.alpha=e.target.value/100;draw();scheduleSave();};
 $('optSnap').onchange=e=>{opt.snap=e.target.checked;snapMark=null;draw();scheduleSave();};
 $('optFit').onchange=e=>{opt.fit=e.target.checked;if(!anim){setUserView(false);view=targetView(facets);draw();}scheduleSave();};
 $('bFit').onclick=()=>{if(anim)return;const cur=facets;animate(()=>cur.map(f=>({f,E:null,flip:f.flip})),cur,300);};
@@ -1038,7 +1100,7 @@ document.addEventListener('keydown',e=>{
   else if(!e.ctrlKey&&!e.metaKey&&!e.altKey){
     // single-key shortcuts (desktop). Enter is left to a focused button.
     const k=e.key.toLowerCase(),free=e.target===document.body||e.target===cv;let hit=true;
-    if(k==='1')setTool('line');else if(k==='2')setTool('point');else if(k==='3')setTool('edge');
+    if(k==='1')setTool('line');else if(k==='2')setTool('point');else if(k==='3')setTool('edge');else if(k==='4')setTool('peek');
     else if(k==='v')setFoldMode('valley');else if(k==='m')setFoldMode('mountain');
     else if(k==='f'){if(!e.repeat)turnOver();}else if(k==='r'){if(!e.repeat)rotate90();}
     else if(k==='enter'&&free&&!$('bFold').hidden)$('bFold').click();
@@ -1110,7 +1172,7 @@ async function restore(){
     if(anim||hist.length||redo.length||src.front||src.back)return;
     src={front:f,back:b};rot=s.rot;
     backMode=s.backMode;$('backMode').value=backMode;
-    opt=s.opt;$('optSee').checked=opt.see;$('optSnap').checked=opt.snap;$('optFit').checked=opt.fit;
+    opt={...OPT0,...s.opt};$('optSee').checked=opt.see;$('seeRow').hidden=!opt.see;$('optAlpha').value=Math.round(opt.alpha*100);$('optSnap').checked=opt.snap;$('optFit').checked=opt.fit;
     setFoldMode(s.foldMode);
     paper=buildPaper();updatePaperNote();showThumbs();
     G=s.G;facets=s.facets;hist=s.hist;redo=s.redo;line=null;setMode('idle');
