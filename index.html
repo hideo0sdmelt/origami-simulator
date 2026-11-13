@@ -656,8 +656,8 @@ function updateHint(){
     :'動かしたい<b>辺</b>から、重ねたい<b>辺</b>へ<b>ドラッグ</b>';
   else if(mode==='drawing')h.innerHTML=tool==='line'?'指を離すと折り線が決まります':'離すと折る位置が決まります(黄色が動く側)';
   else if(lockSide)h.innerHTML=lastType==='mouse'
-    ?'<b>クリックで折る</b>(谷折り・山折りは下で切り替え / Esc でやめる)'
-    :'<b>タップで折る</b>(谷折り・山折りは下で切り替え)';
+    ?'<b>紙をクリックで折る</b>(紙の外をクリックか Esc でやめる)'
+    :'<b>紙をタップで折る</b>(紙の外をタップでやめる)';
   else h.innerHTML=lastType==='mouse'
     ?'<b>折りたい側をクリック</b>(線の端の●で微調整 / Esc でやめる)'
     :(selSide?'<b>もう一度タップで折る</b>(反対側をタップすると切り替え)':'<b>折りたい側をタップ</b>(線の端の●で微調整)');
@@ -686,7 +686,15 @@ function snap(P){
   if(best){snapMark=best;return best.slice();}
   return w;
 }
-function sideAt(P){if(!line)return 0;const s=sideOf(lineInfo(line),toW(P));return Math.abs(s)<1e-9?0:Math.sign(s);}
+// which side of the fold line the screen point is on; 0 when it is too close to the line to tell
+function sideAt(P){if(!line)return 0;const s=sideOf(lineInfo(line),toW(P));return Math.abs(s)*view.s<(lastType==='mouse'?3:8)?0:Math.sign(s);}
+function inPoly(w,poly){
+  let c=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];
+    if((a[1]>w[1])!==(b[1]>w[1])&&w[0]<(b[0]-a[0])*(w[1]-a[1])/(b[1]-a[1])+a[0])c=!c;}
+  return c;
+}
+const onPaper=P=>{const w=toW(P);return facets.some(f=>inPoly(w,worldPoly(f)));};
 
 /* ---------- alignment folds (point→point, edge→edge) ---------- */
 const sub=(a,b)=>[a[0]-b[0],a[1]-b[1]];
@@ -822,8 +830,13 @@ function endPointer(e,cancel){
       else{setMode('pending');lockSide=true;updateHint();}
     }
   }else if(mode==='pending'&&!down.moved&&!down.end&&!cancel){
-    if(lockSide)doFold(selSide);
-    else{const s=sideAt(P);if(lastType==='mouse'||s===selSide)doFold(s);else{selSide=s;updateHint();}}
+    // point / edge folds: the side is already decided, so a tap on the paper folds and a tap off it cancels
+    if(lockSide){if(onPaper(P))doFold(selSide);else{line=null;setMode('idle');}}
+    else{
+      const s=sideAt(P);
+      if(!s)toast(lastType==='mouse'?'線から少し離れて、折りたい側をクリックしてください':'線から少し離れて、折りたい側をタップしてください');
+      else if(lastType==='mouse'||s===selSide)doFold(s);else{selSide=s;updateHint();}
+    }
   }
   if(lastType!=='mouse')snapMark=null;
   down=null;updateBar();draw();
@@ -921,7 +934,7 @@ document.addEventListener('drop',e=>{
 });
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&$('panel').classList.contains('open')){openSheet(false);return;}
-  if(e.target.matches('input,select'))return;
+  if(e.target.matches('select,input:not([type=checkbox])'))return; // a ticked checkbox keeps focus; shortcuts should still work
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redoF():undo();}
   else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redoF();}
   else if(e.key==='Escape'&&mode!=='idle'){line=null;setMode('idle');draw();}
