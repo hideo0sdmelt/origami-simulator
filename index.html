@@ -137,7 +137,16 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
   label.chk{padding:6px 0}
   label.chk input{width:20px;height:20px}
 }
-@media (max-height:520px) and (min-width:821px){.bar{width:auto;gap:6px}}
+/* Short screens (phones held sideways): give the height to the paper.
+   The title row goes away, "紙と設定" floats at the top right, and the hint sits beside the tools. */
+@media (max-height:520px){
+  .app{position:relative;grid-template-rows:minmax(0,1fr)}
+  header{position:absolute;top:8px;right:8px;z-index:5}
+  header h1,header .stat{display:none}
+  #bMenu{background:var(--panel);box-shadow:0 2px 10px rgba(0,0,0,.22)}
+  .top{flex-direction:row;flex-wrap:wrap;align-items:center;column-gap:12px;right:112px}
+  .bar{width:auto;gap:6px}
+}
 @media (max-width:380px){.stat{display:none}#bMenu{margin-left:auto}}
 @media (prefers-reduced-motion:reduce){.toast,.panel,.panel.open{transition:none}}
 </style>
@@ -153,7 +162,7 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
 
   <div class="stage" id="stage">
     <canvas id="cv" aria-label="折り紙の作業台。ドラッグで折り線を引き、折りたい側を選んで折ります。2本指で拡大と移動ができます。"></canvas>
-    <div class="top">
+    <div class="top" id="top">
       <div class="tools" id="tools">
         <div class="seg" role="group" aria-label="折り方の指定">
           <button id="tLine" aria-pressed="true" title="折り線を直接引く">折り線を引く</button>
@@ -385,11 +394,11 @@ let cw=0,ch=0,dpr=1,view={s:1,cx:0,cy:0};
 /* userView: the person zoomed or panned by hand (pinch / wheel). Resizes then keep their view;
    folding, undo and "全体を表示" go back to the automatic fit. */
 let userView=false;
-// free area for the paper: below the tool row (+ one line of hint), above the bottom bar
+// free area for the paper: below the tools and hint (stacked, or side by side on short screens), above the bottom bar
 function frame(){
   const px=cw<600?14:56;
-  const sr=cv.getBoundingClientRect(),tr=$('tools').getBoundingClientRect(),br=$('bar').getBoundingClientRect();
-  const top=Math.max(px,tr.bottom-sr.top+(cw<600?30:36)), bot=Math.max(px,sr.bottom-br.top+14);
+  const sr=cv.getBoundingClientRect(),tr=$('top').getBoundingClientRect(),br=$('bar').getBoundingClientRect();
+  const top=Math.max(px,tr.bottom-sr.top+10), bot=Math.max(px,sr.bottom-br.top+14);
   return {px,top,bot};
 }
 function targetView(list){
