@@ -42,11 +42,19 @@ h1{font-family:var(--f-display);font-weight:400;font-size:22px;margin:0;letter-s
 .stat{margin-left:auto;font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .stage{position:relative;border-radius:10px;overflow:hidden;background:var(--mat);min-height:360px}
 canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
-.hint{position:absolute;left:12px;top:10px;right:12px;color:#fff;font-size:13px;pointer-events:none;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+/* Overlays on the stage: tool choice + hint at the top, actions + main bar docked at the bottom. */
+.top{position:absolute;left:12px;top:10px;right:12px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;pointer-events:none}
+.hint{color:#fff;font-size:13px;line-height:1.45;text-shadow:0 1px 2px rgba(0,0,0,.55)}
 .hint b{color:var(--crease);font-weight:700}
-.bar{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:6px;flex-wrap:wrap;justify-content:center;
-  background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 4px 18px rgba(0,0,0,.18);max-width:calc(100% - 24px)}
-button{font:inherit;font-size:13px;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:7px;padding:6px 10px;cursor:pointer;white-space:nowrap}
+.dock{position:absolute;left:12px;right:12px;bottom:12px;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+.dock>*{pointer-events:auto}
+.act{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.act button{background:var(--panel);box-shadow:0 2px 10px rgba(0,0,0,.22)}
+#bFold{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:700}
+.bar{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:100%;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 4px 18px rgba(0,0,0,.18)}
+button{font:inherit;font-size:13px;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:7px;padding:6px 10px;cursor:pointer;white-space:nowrap;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 button:hover:not(:disabled){background:var(--soft)}
 button:disabled{opacity:.4;cursor:default}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -72,18 +80,58 @@ select{font:inherit;font-size:13px;color:var(--fg);background:var(--panel);borde
 .note{font-size:12px;color:var(--muted);margin:6px 0 0}
 .note.warn{color:var(--warn)}
 ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:column;gap:4px}
-.tools{position:absolute;left:12px;top:36px;right:12px;pointer-events:none}
+.tools{max-width:100%}
 .tools .seg{background:var(--panel);pointer-events:auto;max-width:100%;flex-wrap:wrap}
-.toast{position:absolute;left:50%;top:80px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:6px 12px;border-radius:7px;font-size:13px;pointer-events:none;opacity:0;transition:opacity .2s}
+.toast{position:absolute;left:50%;top:96px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:6px 12px;border-radius:7px;font-size:13px;pointer-events:none;opacity:0;transition:opacity .2s;max-width:calc(100% - 24px);text-align:center}
 .toast.on{opacity:1}
 .danger{color:var(--warn)}
-@media (max-width:820px){
-  html,body{height:auto}
-  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;height:auto}
-  .stage{height:min(72vh,620px)}
-  .stat{margin-left:0;width:100%}
+/* Text that only fits a mouse or only a finger. */
+.coarse{display:none}
+@media (pointer:coarse){.coarse{display:inline}.fine{display:none}}
+/* Phone-only pieces stay out of the desktop layout. */
+.mOnly{display:none!important}
+.sheetHead{display:none}
+.scrim{display:none}
+
+/* Phones (and short landscape screens): the stage fills the screen; the panel becomes a sheet that slides up. */
+@media (max-width:820px),(max-height:520px){
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+  body{padding:max(8px,env(safe-area-inset-top,0px)) max(8px,env(safe-area-inset-right,0px)) max(8px,env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:8px;height:100%}
+  header{align-items:center;gap:10px;flex-wrap:nowrap}
+  h1{font-size:16px;white-space:nowrap}
+  .sub{display:none}
+  .stat{font-size:11px;white-space:nowrap}
+  .mOnly{display:inline-block!important}
+  #bMenu{min-height:40px;padding:6px 12px;font-weight:700;border-color:var(--accent);color:var(--accent)}
+  .stage{min-height:0}
+  .top{left:8px;right:8px;top:8px}
+  .hint{font-size:12.5px}
+  .tools .seg button{min-height:40px;padding:6px 10px}
+  .dock{left:6px;right:6px;bottom:6px}
+  .bar{width:100%;flex-wrap:nowrap;justify-content:space-between;gap:3px;padding:5px}
+  .bar button{min-height:44px;min-width:44px;padding:6px 8px;font-size:14px}
+  .bar .seg button{min-width:0}
+  .bar .t,.sep{display:none}
+  #bUndo,#bRedo,#bRot{font-size:22px;line-height:1}
+  .slot{aspect-ratio:4/3}
+  .act button{min-height:44px;padding:8px 16px;font-size:14px}
+  .scrim{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:29}
+  .panel{position:fixed;left:0;right:0;bottom:0;z-index:30;max-height:84vh;max-height:84dvh;gap:16px;
+    border-radius:16px 16px 0 0;border-bottom:0;box-shadow:0 -8px 30px rgba(0,0,0,.25);overscroll-behavior:contain;
+    padding:0 max(16px,env(safe-area-inset-right,0px)) max(20px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+    transform:translateY(102%);visibility:hidden;transition:transform .25s ease,visibility 0s linear .25s}
+  .panel.open{transform:none;visibility:visible;transition:transform .25s ease}
+  .sheetHead{display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:2;background:var(--panel);
+    padding:12px 0 8px;margin-bottom:-6px;border-bottom:1px solid var(--line);font-weight:700}
+  .sheetHead button{min-height:40px}
+  .panel button,.panel select{min-height:40px}
+  label.chk{padding:6px 0}
+  label.chk input{width:20px;height:20px}
 }
-@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+@media (max-height:520px) and (min-width:821px){.bar{width:auto;gap:6px}}
+@media (max-width:380px){.stat{display:none}#bMenu{margin-left:auto}}
+@media (prefers-reduced-motion:reduce){.toast,.panel,.panel.open{transition:none}}
 </style>
 </head>
 <body>
@@ -92,41 +140,50 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
     <h1>おりがみシミュレーター</h1>
     <span class="sub">表と裏の画像から、紙を折らずに折れる</span>
     <span class="stat" id="stat">手順 0 · 面 1</span>
+    <button id="bMenu" class="mOnly" aria-controls="panel" aria-expanded="false">紙と設定</button>
   </header>
 
   <div class="stage" id="stage">
     <canvas id="cv" aria-label="折り紙の作業台。ドラッグで折り線を引き、折りたい側を選んで折ります。"></canvas>
-    <div class="hint" id="hint"></div>
-    <div class="tools">
-      <div class="seg" role="group" aria-label="折り方の指定">
-        <button id="tLine" aria-pressed="true" title="折り線を直接引く">折り線を引く</button>
-        <button id="tPoint" aria-pressed="false" title="角や点を、別の点に重ねるように折る">点を合わせる</button>
-        <button id="tEdge" aria-pressed="false" title="辺を、別の辺に重ねるように折る">辺を合わせる</button>
+    <div class="top">
+      <div class="tools" id="tools">
+        <div class="seg" role="group" aria-label="折り方の指定">
+          <button id="tLine" aria-pressed="true" title="折り線を直接引く">折り線を引く</button>
+          <button id="tPoint" aria-pressed="false" title="角や点を、別の点に重ねるように折る">点を合わせる</button>
+          <button id="tEdge" aria-pressed="false" title="辺を、別の辺に重ねるように折る">辺を合わせる</button>
+        </div>
       </div>
+      <div class="hint" id="hint"></div>
     </div>
     <div class="toast" id="toast" role="status"></div>
-    <div class="bar">
-      <div class="seg" role="group" aria-label="折り方">
-        <button id="mValley" aria-pressed="true" title="手前に折って上に重ねる">谷折り</button>
-        <button id="mMountain" aria-pressed="false" title="向こう側に折って下に回す">山折り</button>
+    <div class="dock">
+      <div class="act" id="act" hidden>
+        <button id="bFold" hidden>折る</button>
+        <button id="bCancel" hidden>線を消す</button>
       </div>
-      <span class="sep"></span>
-      <button id="bUndo" title="元に戻す (Ctrl+Z)">↶ 戻す</button>
-      <button id="bRedo" title="やり直し (Ctrl+Y)">↷ 進む</button>
-      <span class="sep"></span>
-      <button id="bTurn" title="紙全体を左右に裏返す">裏返す</button>
-      <button id="bRot" title="90°回す">⟳ 90°</button>
-      <button id="bFold" hidden style="background:var(--accent);color:var(--accent-fg);border-color:var(--accent)">折る</button>
-      <button id="bCancel" hidden>線を消す</button>
+      <div class="bar" id="bar">
+        <div class="seg" role="group" aria-label="折り方">
+          <button id="mValley" aria-pressed="true" title="手前に折って上に重ねる">谷折り</button>
+          <button id="mMountain" aria-pressed="false" title="向こう側に折って下に回す">山折り</button>
+        </div>
+        <span class="sep"></span>
+        <button id="bUndo" title="元に戻す (Ctrl+Z)" aria-label="戻す">↶<span class="t"> 戻す</span></button>
+        <button id="bRedo" title="やり直し (Ctrl+Y)" aria-label="進む">↷<span class="t"> 進む</span></button>
+        <span class="sep"></span>
+        <button id="bTurn" title="紙全体を左右に裏返す">裏返す</button>
+        <button id="bRot" title="90°回す" aria-label="90°回す">⟳<span class="t"> 90°</span></button>
+      </div>
     </div>
   </div>
 
-  <aside class="panel">
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="panel" id="panel" aria-label="紙と設定">
+    <div class="sheetHead"><span>紙と設定</span><button id="bClose">閉じる</button></div>
     <section>
       <h2>紙</h2>
       <div class="slots">
-        <label class="slot" id="slotF"><span class="lb">表</span><span class="sm">画像を選ぶ<br>またはドロップ</span><input type="file" id="fileF" accept="image/*"></label>
-        <label class="slot" id="slotB"><span class="lb">裏</span><span class="sm">画像を選ぶ<br>またはドロップ</span><input type="file" id="fileB" accept="image/*"></label>
+        <label class="slot" id="slotF"><span class="lb">表</span><span class="sm"><span class="fine">画像を選ぶ<br>またはドロップ</span><span class="coarse">タップして<br>選ぶ・撮る</span></span><input type="file" id="fileF" accept="image/*"></label>
+        <label class="slot" id="slotB"><span class="lb">裏</span><span class="sm"><span class="fine">画像を選ぶ<br>またはドロップ</span><span class="coarse">タップして<br>選ぶ・撮る</span></span><input type="file" id="fileB" accept="image/*"></label>
       </div>
       <div class="slots" style="margin-top:8px">
         <button id="rotF" title="表の画像を時計回りに90°回す">表を回転 ⟳</button>
@@ -309,12 +366,18 @@ function bbox(list){
 
 /* ---------- view ---------- */
 let cw=0,ch=0,dpr=1,view={s:1,cx:0,cy:0};
-const PAD=56;
+// free area for the paper: below the tool row (+ one line of hint), above the bottom bar
+function frame(){
+  const px=cw<600?14:56;
+  const sr=cv.getBoundingClientRect(),tr=$('tools').getBoundingClientRect(),br=$('bar').getBoundingClientRect();
+  const top=Math.max(px,tr.bottom-sr.top+(cw<600?30:36)), bot=Math.max(px,sr.bottom-br.top+14);
+  return {px,top,bot};
+}
 function targetView(list){
-  const bb=bbox(list), aw=Math.max(40,cw-PAD*2), ah=Math.max(40,ch-PAD*2-40);
+  const bb=bbox(list),F=frame(), aw=Math.max(40,cw-F.px*2), ah=Math.max(40,ch-F.top-F.bot);
   const fitS=Math.min(aw/bb.w,ah/bb.h), baseS=Math.min(aw/paper.W,ah/paper.H);
   const s=opt.fit?Math.min(fitS,baseS*6):Math.min(fitS,baseS);
-  return {s,cx:bb.cx,cy:bb.cy+ (20/s)};
+  return {s,cx:bb.cx,cy:bb.cy-(F.top+ah/2-ch/2)/s};
 }
 const toScr=(w,v=view)=>[(w[0]-v.cx)*v.s+cw/2,(w[1]-v.cy)*v.s+ch/2];
 const toW=(P,v=view)=>[(P[0]-cw/2)/v.s+v.cx,(P[1]-ch/2)/v.s+v.cy];
@@ -474,17 +537,20 @@ function redoF(){
 }
 
 /* ---------- pointer interaction ---------- */
-let mode='idle', line=null, down=null, selSide=0, snapMark=null, lastType='mouse';
+let mode='idle', line=null, down=null, selSide=0, snapMark=null, lastType=matchMedia('(pointer: coarse)').matches?'touch':'mouse';
 let tool='line', align=null, lockSide=false, hoverEdge=null;
 function setMode(m){mode=m;if(m!=='pending'){selSide=0;lockSide=false;}if(m==='idle')align=null;updateBar();updateHint();}
-function updateBar(){$('bCancel').hidden=mode!=='pending';$('bFold').hidden=!(mode==='pending'&&lockSide&&selSide);}
+function updateBar(){$('bCancel').hidden=mode!=='pending';$('bFold').hidden=!(mode==='pending'&&lockSide&&selSide);updateAct();}
+function updateAct(){$('act').hidden=$('bFold').hidden&&$('bCancel').hidden;}
 function updateHint(){
   const h=$('hint');
   if(mode==='idle')h.innerHTML=tool==='line'?'紙の上を<b>ドラッグ</b>して折り線を引く'
     :tool==='point'?'動かしたい<b>角や点</b>から、重ねたい場所へ<b>ドラッグ</b>'
     :'動かしたい<b>辺</b>から、重ねたい<b>辺</b>へ<b>ドラッグ</b>';
   else if(mode==='drawing')h.innerHTML=tool==='line'?'指を離すと折り線が決まります':'離すと折る位置が決まります(黄色が動く側)';
-  else if(lockSide)h.innerHTML='<b>タップ/クリックで折る</b>(谷折り・山折りはここで切り替え / Esc でやめる)';
+  else if(lockSide)h.innerHTML=lastType==='mouse'
+    ?'<b>クリックで折る</b>(谷折り・山折りは下で切り替え / Esc でやめる)'
+    :'<b>タップで折る</b>(谷折り・山折りは下で切り替え)';
   else h.innerHTML=lastType==='mouse'
     ?'<b>折りたい側をクリック</b>(線の端の●で微調整 / Esc でやめる)'
     :(selSide?'<b>もう一度タップで折る</b>(反対側をタップすると切り替え)':'<b>折りたい側をタップ</b>(線の端の●で微調整)');
@@ -652,6 +718,16 @@ $('backMode').onchange=e=>{backMode=e.target.value;draw();};
 $('optSee').onchange=e=>{opt.see=e.target.checked;draw();};
 $('optSnap').onchange=e=>{opt.snap=e.target.checked;snapMark=null;draw();};
 $('optFit').onchange=e=>{opt.fit=e.target.checked;if(!anim){view=targetView(facets);draw();}};
+
+
+/* phone sheet for the panel */
+function openSheet(b){
+  $('panel').classList.toggle('open',b);$('scrim').hidden=!b;$('bMenu').setAttribute('aria-expanded',b);
+  if(b)$('bClose').focus({preventScroll:true});else if(document.activeElement&&$('panel').contains(document.activeElement))$('bMenu').focus();
+}
+$('bMenu').onclick=()=>openSheet(true);
+$('bClose').onclick=()=>openSheet(false);
+$('scrim').onclick=()=>openSheet(false);
 $('bSwap').onclick=()=>{if(!src.front&&!src.back){toast('先に画像を入れてください');return;}
   [src.front,src.back]=[src.back,src.front];[src.frontURL,src.backURL]=[src.backURL,src.frontURL];rot={front:rot.back,back:rot.front};showThumbs();rebuildPaper();};
 $('bSample').onclick=()=>{src={front:null,back:null,frontURL:null,backURL:null};rot={front:0,back:0};showThumbs();rebuildPaper();};
@@ -685,6 +761,7 @@ document.addEventListener('paste',e=>{
   loadFile(item.getAsFile(),!src.front?'front':(!src.back?'back':'front'));
 });
 document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&$('panel').classList.contains('open')){openSheet(false);return;}
   if(e.target.matches('input,select'))return;
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redoF():undo();}
   else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redoF();}
