@@ -184,6 +184,7 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
       <div class="act" id="act" hidden>
         <button id="bFold" hidden>折る</button>
         <button id="bCancel" hidden>線を消す</button>
+        <button id="bRefold" hidden title="直前の折りを、同じ線のまま谷折りと山折りを入れ替えて折り直す"></button>
         <button id="bFit" hidden title="拡大をやめて、紙全体を表示する">全体を表示</button>
       </div>
       <div class="bar" id="bar">
@@ -626,8 +627,26 @@ function doFold(sigma){
   const Gi=inv(G),ref=[line.a[0]+sp.info.n[0]*sigma*10,line.a[1]+sp.info.n[1]*sigma*10];
   pushHist({a:ap(Gi,line.a),b:ap(Gi,line.b),ref:ap(Gi,ref),mode:det(G)<0?swapMode(foldMode):foldMode});
   const next=finishFold(sp,foldMode);
-  line=null;setMode('idle');
+  line=null;setMode('idle');setRefold(true);
   animate(foldItems(sp,foldMode),next,520);
+}
+/* Right after a fold, offer to fold it the other way (valley <-> mountain) on the same line, in one tap.
+   The offer goes away with the next action (setMode clears it). */
+let refoldable=false;
+function setRefold(b){refoldable=b;updateBar();}
+function lastFoldMode(){const f=hist[hist.length-1].fold;return det(G)<0?swapMode(f.mode):f.mode;} // as seen now
+function refold(){
+  if(anim||!refoldable||!hist.length||!hist[hist.length-1].fold)return;
+  const e=hist[hist.length-1],fold=e.fold;
+  const L={a:ap(G,fold.a),b:ap(G,fold.b)},info=lineInfo(L);
+  const sigma=Math.sign(sideOf(info,ap(G,fold.ref)))||1;
+  const oldM=lastFoldMode(),newM=swapMode(oldM);
+  const sp=splitAll(toDisp(e.base,G),L,sigma);
+  e.fold={...fold,mode:swapMode(fold.mode)}; // undo/redo replay the corrected fold
+  // unfold the old way, then fold the new way
+  const fo=foldItems(sp,oldM),fn=foldItems(sp,newM);
+  setRefold(true);
+  animate(t=>t<.5?fo(1-2*t):fn(2*t-1),finishFold(sp,newM),820);
 }
 function turnOver(){
   if(anim)return;
@@ -661,13 +680,16 @@ function redoF(){
 /* ---------- pointer interaction ---------- */
 let mode='idle', line=null, down=null, selSide=0, snapMark=null, lastType=matchMedia('(pointer: coarse)').matches?'touch':'mouse';
 let tool='line', align=null, lockSide=false, hoverEdge=null;
-function setMode(m){mode=m;if(m!=='pending'){selSide=0;lockSide=false;}if(m==='idle')align=null;updateBar();updateHint();}
+function setMode(m){mode=m;refoldable=false;if(m!=='pending'){selSide=0;lockSide=false;}if(m==='idle')align=null;updateBar();updateHint();}
 const modeName=()=>foldMode==='valley'?'谷折り':'山折り';
 function updateBar(){
   $('bCancel').hidden=mode!=='pending';$('bFold').hidden=!(mode==='pending'&&lockSide&&selSide);
-  $('bFold').textContent=modeName()+'で折る';updateAct();
+  $('bFold').textContent=modeName()+'で折る';
+  const rf=$('bRefold');rf.hidden=!(refoldable&&mode==='idle');
+  if(!rf.hidden)rf.textContent=(lastFoldMode()==='valley'?'山折り':'谷折り')+'に折り直す';
+  updateAct();
 }
-function updateAct(){$('act').hidden=$('bFold').hidden&&$('bCancel').hidden&&$('bFit').hidden;}
+function updateAct(){$('act').hidden=$('bFold').hidden&&$('bCancel').hidden&&$('bRefold').hidden&&$('bFit').hidden;}
 function updateHint(){
   const h=$('hint');
   if(mode==='idle')h.innerHTML=tool==='line'?'紙の上を<b>ドラッグ</b>して折り線を引く'
@@ -908,6 +930,7 @@ $('bUndo').onclick=undo;$('bRedo').onclick=redoF;
 $('bTurn').onclick=turnOver;$('bRot').onclick=rotate90;
 $('bCancel').onclick=()=>{line=null;setMode('idle');draw();};
 $('bFold').onclick=()=>{if(mode==='pending'&&selSide)doFold(selSide);};
+$('bRefold').onclick=refold;
 function setTool(t){if(anim)return;tool=t;line=null;hoverEdge=null;snapMark=null;setMode('idle');
   for(const [id,v] of [['tLine','line'],['tPoint','point'],['tEdge','edge']])$(id).setAttribute('aria-pressed',t===v);draw();}
 $('tLine').onclick=()=>setTool('line');$('tPoint').onclick=()=>setTool('point');$('tEdge').onclick=()=>setTool('edge');
