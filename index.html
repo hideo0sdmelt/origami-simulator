@@ -286,8 +286,9 @@ function toDisp(list,g){const fl=det(g)<0;const out=list.map(f=>({poly:f.poly,M:
 const fromDisp=list=>toDisp(list,inv(G));
 
 /* ---------- paper ---------- */
-let paper={W:900,H:900,front:null,back:null};
-let src={front:null,back:null,frontURL:null,backURL:null};
+let paper=null;
+/* src holds each image already shrunk to MAXSIDE (a canvas), so the full-size camera photo is not kept in memory. */
+let src={front:null,back:null};
 let facets=[], hist=[], redo=[];
 let foldMode='valley', backMode='h';
 let opt={see:false,snap:true,fit:false};
@@ -315,14 +316,40 @@ function makeSample(){
 }
 
 let rot={front:0,back:0};
-function dims(which){const img=src[which],odd=rot[which]%2===1;return odd?[img.naturalHeight,img.naturalWidth]:[img.naturalWidth,img.naturalHeight];}
+function dims(which,s=src,r=rot){const img=s[which],odd=r[which]%2===1;return odd?[img.height,img.width]:[img.width,img.height];}
+function shrink(img){
+  const w=img.naturalWidth,h=img.naturalHeight,k=Math.min(1,MAXSIDE/Math.max(w,h));
+  return toCanvas(img,Math.max(1,Math.round(w*k)),Math.max(1,Math.round(h*k)));
+}
+// small preview for the image slots (the slot <img> would otherwise decode the full-size photo)
+const thumbs=new WeakMap();
+function thumbOf(c){
+  let u=thumbs.get(c);
+  if(!u){const k=Math.min(1,480/Math.max(c.width,c.height));u=toCanvas(c,Math.max(1,Math.round(c.width*k)),Math.max(1,Math.round(c.height*k))).toDataURL('image/png');thumbs.set(c,u);}
+  return u;
+}
 function toCanvasRot(img,w,h,r){
+  if(!r&&img.width===w&&img.height===h)return img; // already the right size: share it instead of copying
   const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');g.imageSmoothingQuality='high';
   g.translate(w/2,h/2);g.rotate(r*Math.PI/2);
   const odd=r%2===1,dw=odd?h:w,dh=odd?w:h;
   g.drawImage(img,-dw/2,-dh/2,dw,dh);return c;
 }
-function rebuildPaper(keepFolds){
+// paper size that a given set of images would give
+function sizeFor(s,r){
+  if(!s.front&&!s.back)return [900,900];
+  const [w,h]=dims(s.front?'front':'back',s,r),k=Math.min(1,MAXSIDE/Math.max(w,h));
+  return [Math.round(w*k),Math.round(h*k)];
+}
+/* Swap in new images. If the paper keeps its size, the folds and history stay (only the pictures change).
+   If the size changes, the folds can't be kept, so ask first when there is something to lose. */
+function setImages(s,r){
+  const [W,H]=sizeFor(s,r);
+  if(paper&&(W!==paper.W||H!==paper.H)&&(hist.length||redo.length)
+    &&!confirm('紙の縦横の大きさが変わるため、折った状態と「戻す」の履歴が消えます。続けますか?'))return false;
+  src=s;rot=r;showThumbs();rebuildPaper();return true;
+}
+function rebuildPaper(){
   const prev=paper;
   if(!src.front&&!src.back){paper=makeSample();}
   else{
@@ -334,13 +361,13 @@ function rebuildPaper(keepFolds){
       back:src.back?toCanvasRot(src.back,W,H,rot.back):blankCanvas(W,H,'#ffffff')};
   }
   updatePaperNote();
-  if(keepFolds&&prev&&prev.W===paper.W&&prev.H===paper.H)draw();
+  if(prev&&prev.W===paper.W&&prev.H===paper.H)draw();
   else resetFolds(false);
 }
 function rotateImage(which){
   if(anim)return;
   if(!src[which]){toast(which==='front'?'先に表の画像を入れてください':'先に裏の画像を入れてください');return;}
-  rot[which]=(rot[which]+1)%4;showThumbs();rebuildPaper(true);
+  setImages(src,{...rot,[which]:(rot[which]+1)%4});
 }
 function updatePaperNote(){
   const el=$('paperNote');
@@ -546,10 +573,15 @@ function animate(items,next,dur){
     const t=Math.min(1,(now-t0)/dur),e=ease(t);anim.t=e;
     view={s:from.s+(to.s-from.s)*e,cx:from.cx+(to.cx-from.cx)*e,cy:from.cy+(to.cy-from.cy)*e};
     render();
-    if(t<1)requestAnimationFrame(step);else{anim=null;facets=next;view=to;draw();updateUI();}
+    if(t<1)requestAnimationFrame(step);else{anim=null;facets=next;view=to;draw();updateUI();runIdle();}
   };
   requestAnimationFrame(step);
 }
+/* Work that replaces the paper (an image finishing loading, a paste) waits for the running animation,
+   which would otherwise put the old facets back when it ends. */
+let idleQ=[];
+function whenIdle(fn){if(anim)idleQ.push(fn);else fn();}
+function runIdle(){const q=idleQ;idleQ=[];for(const fn of q)fn();}
 function foldItems(sp,mode){
   return t=>{
     const k=1-Math.cos(Math.PI*t), E=squash(sp.info.p,sp.info.n,k), over=t>.5;
@@ -811,8 +843,10 @@ cv.addEventListener('gesturestart',e=>e.preventDefault());
 /* ---------- UI wiring ---------- */
 function updateUI(){
   $('bUndo').disabled=!hist.length;$('bRedo').disabled=!redo.length;
-  $('stat').textContent=`手順 ${hist.length} · 面 ${facets.length}`;
+  $('stat').textContent=`手順 ${foldCount()} · 面 ${facets.length}`;
 }
+// folds in the current state: history entries back to the last "広げて最初から" (an entry without a fold)
+function foldCount(){let n=0;for(let i=hist.length-1;i>=0&&hist[i].fold;i--)n++;return n;}
 let toastT=0;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),1800);}
 function setFoldMode(m){foldMode=m;$('mValley').setAttribute('aria-pressed',m==='valley');$('mMountain').setAttribute('aria-pressed',m==='mountain');}
 $('mValley').onclick=()=>setFoldMode('valley');
@@ -839,15 +873,15 @@ function openSheet(b){
 $('bMenu').onclick=()=>openSheet(true);
 $('bClose').onclick=()=>openSheet(false);
 $('scrim').onclick=()=>openSheet(false);
-$('bSwap').onclick=()=>{if(!src.front&&!src.back){toast('先に画像を入れてください');return;}
-  [src.front,src.back]=[src.back,src.front];[src.frontURL,src.backURL]=[src.backURL,src.frontURL];rot={front:rot.back,back:rot.front};showThumbs();rebuildPaper();};
-$('bSample').onclick=()=>{src={front:null,back:null,frontURL:null,backURL:null};rot={front:0,back:0};showThumbs();rebuildPaper();};
+$('bSwap').onclick=()=>{if(anim)return;if(!src.front&&!src.back){toast('先に画像を入れてください');return;}
+  setImages({front:src.back,back:src.front},{front:rot.back,back:rot.front});};
+$('bSample').onclick=()=>{if(anim)return;setImages({front:null,back:null},{front:0,back:0});};
 $('rotF').onclick=()=>rotateImage('front');$('rotB').onclick=()=>rotateImage('back');
 
 function showThumbs(){
   for(const [k,id] of [['front','slotF'],['back','slotB']]){
     const slot=$(id);let img=slot.querySelector('img');
-    const url=src[k+'URL'];
+    const url=src[k]?thumbOf(src[k]):null;
     if(url){if(!img){img=document.createElement('img');img.alt='';slot.prepend(img);}img.src=url;img.style.transform=`rotate(${rot[k]*90}deg)`;slot.classList.add('has');}
     else{if(img)img.remove();slot.classList.remove('has');}
   }
@@ -855,10 +889,16 @@ function showThumbs(){
 function loadFile(file,which){
   if(!file||!/^image\//.test(file.type)){toast('画像ファイルを選んでください');return;}
   const url=URL.createObjectURL(file),img=new Image();
-  img.onload=()=>{src[which]=img;rot[which]=0;src[which+'URL']=url;showThumbs();rebuildPaper();toast(which==='front'?'表を読み込みました':'裏を読み込みました');};
+  img.onload=()=>{
+    URL.revokeObjectURL(url);
+    const c=shrink(img);
+    whenIdle(()=>{if(setImages({...src,[which]:c},{...rot,[which]:0}))toast(which==='front'?'表を読み込みました':'裏を読み込みました');});
+  };
   img.onerror=()=>{URL.revokeObjectURL(url);toast('この画像は読み込めませんでした。PNG か JPEG で試してください');};
   img.src=url;
 }
+// where a pasted or dropped image goes when no slot was chosen: front if empty, then back, else front
+const autoSlot=()=>!src.front?'front':(!src.back?'back':'front');
 $('fileF').onchange=e=>{loadFile(e.target.files[0],'front');e.target.value='';};
 $('fileB').onchange=e=>{loadFile(e.target.files[0],'back');e.target.value='';};
 for(const [id,which] of [['slotF','front'],['slotB','back']]){
@@ -869,7 +909,15 @@ for(const [id,which] of [['slotF','front'],['slotB','back']]){
 }
 document.addEventListener('paste',e=>{
   const item=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/'));if(!item)return;
-  loadFile(item.getAsFile(),!src.front?'front':(!src.back?'back':'front'));
+  loadFile(item.getAsFile(),autoSlot());
+});
+/* A file dropped anywhere else would make the browser open it in place of the app and lose the work.
+   Catch it, and load it like a paste. Drops on the slots are handled (and marked done) above. */
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{
+  if(e.defaultPrevented)return;
+  e.preventDefault();
+  const file=e.dataTransfer?.files[0];if(file)loadFile(file,autoSlot());
 });
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&$('panel').classList.contains('open')){openSheet(false);return;}
