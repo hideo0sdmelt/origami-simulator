@@ -172,9 +172,9 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
     <div class="top" id="top">
       <div class="tools" id="tools">
         <div class="seg" role="group" aria-label="折り方の指定">
-          <button id="tLine" aria-pressed="true" title="折り線を直接引く">折り線を引く</button>
-          <button id="tPoint" aria-pressed="false" title="角や点を、別の点に重ねるように折る">点を合わせる</button>
-          <button id="tEdge" aria-pressed="false" title="辺を、別の辺に重ねるように折る">辺を合わせる</button>
+          <button id="tLine" aria-pressed="true" title="折り線を直接引く (1)">折り線を引く</button>
+          <button id="tPoint" aria-pressed="false" title="角や点を、別の点に重ねるように折る (2)">点を合わせる</button>
+          <button id="tEdge" aria-pressed="false" title="辺を、別の辺に重ねるように折る (3)">辺を合わせる</button>
         </div>
       </div>
       <div class="hint" id="hint"></div>
@@ -185,19 +185,19 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
         <button id="bFold" hidden>折る</button>
         <button id="bCancel" hidden>線を消す</button>
         <button id="bRefold" hidden title="直前の折りを、同じ線のまま谷折りと山折りを入れ替えて折り直す"></button>
-        <button id="bFit" hidden title="拡大をやめて、紙全体を表示する">全体を表示</button>
+        <button id="bFit" hidden title="拡大をやめて、紙全体を表示する (0)">全体を表示</button>
       </div>
       <div class="bar" id="bar">
         <div class="seg" role="group" aria-label="折り方">
-          <button id="mValley" aria-pressed="true" title="手前に折って上に重ねる">谷折り</button>
-          <button id="mMountain" aria-pressed="false" title="向こう側に折って下に回す">山折り</button>
+          <button id="mValley" aria-pressed="true" title="手前に折って上に重ねる (V)">谷折り</button>
+          <button id="mMountain" aria-pressed="false" title="向こう側に折って下に回す (M)">山折り</button>
         </div>
         <span class="sep"></span>
         <button id="bUndo" title="元に戻す (Ctrl+Z)" aria-label="戻す">↶<span class="t"> 戻す</span></button>
         <button id="bRedo" title="やり直し (Ctrl+Y)" aria-label="進む">↷<span class="t"> 進む</span></button>
         <span class="sep"></span>
-        <button id="bTurn" title="紙全体を左右に裏返す">裏返す</button>
-        <button id="bRot" title="90°回す" aria-label="90°回す">⟳<span class="t"> 90°</span></button>
+        <button id="bTurn" title="紙全体を左右に裏返す (F)">裏返す</button>
+        <button id="bRot" title="90°回す (R)" aria-label="90°回す">⟳<span class="t"> 90°</span></button>
       </div>
     </div>
   </div>
@@ -248,7 +248,9 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
         <li>間違えたら「戻す」。何度でも試せます</li>
       </ol>
       <p class="note">「点を合わせる」は角をどこかに重ねる折り方、「辺を合わせる」は辺を別の辺に重ねる折り方です。例えば長方形の上の辺を右の辺へドラッグすると、先端に三角ができます。</p>
+      <p class="note">折り線は、水平・垂直・45°の近くで吸い付きます<span class="fine">(Shift を押しながら引くと必ず揃う)</span>。</p>
       <p class="note">画像は紙の端ぴったりに切り抜いておくと、表と裏がきれいに重なります。</p>
+      <p class="note fine">キー:1・2・3 折り方の指定 / V 谷折り / M 山折り / F 裏返す / R 90°回す / Enter 折る / 0 全体を表示 / Ctrl+Z 戻す / Ctrl+Y 進む / Esc やめる / Space+ドラッグ 移動</p>
     </section>
 
     <section id="installSec" hidden>
@@ -570,6 +572,14 @@ function drawScene(V,C){
     }
   }
   if(hoverEdge&&mode==='idle'&&tool==='edge')seg(hoverEdge,C.crease,5,.75);
+  if(angleMark&&down){
+    // which angle the line was pulled onto
+    const P=toS(angleMark.p),t=angleMark.k%2===0?(angleMark.k%4===0?'水平':'垂直'):'45°';
+    ctx.font='bold 12px "Zen Kaku Gothic New",sans-serif';const w=ctx.measureText(t).width+12;
+    const x=Math.max(4,Math.min(cw-w-4,P[0]+14)),y=Math.max(4,Math.min(ch-22,P[1]-30));
+    ctx.fillStyle='rgba(0,0,0,.7)';ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,w,18,9):ctx.rect(x,y,w,18);ctx.fill();
+    ctx.fillStyle='#fff';ctx.textBaseline='middle';ctx.fillText(t,x+6,y+10);ctx.textBaseline='alphabetic';
+  }
   if(snapMark){const P=toS(snapMark);ctx.beginPath();ctx.arc(P[0],P[1],10,0,Math.PI*2);ctx.lineWidth=2;ctx.strokeStyle=C.crease;ctx.stroke();}
 }
 let raf=0;function draw(){if(!raf)raf=requestAnimationFrame(()=>{raf=0;render();});}
@@ -695,7 +705,7 @@ function updateHint(){
   if(mode==='idle')h.innerHTML=tool==='line'?'紙の上を<b>ドラッグ</b>して折り線を引く'
     :tool==='point'?'動かしたい<b>角や点</b>から、重ねたい場所へ<b>ドラッグ</b>'
     :'動かしたい<b>辺</b>から、重ねたい<b>辺</b>へ<b>ドラッグ</b>';
-  else if(mode==='drawing')h.innerHTML=tool==='line'?'指を離すと折り線が決まります':'離すと折る位置が決まります(黄色が動く側)';
+  else if(mode==='drawing')h.innerHTML=tool==='line'?(lastType==='mouse'?'離すと折り線が決まります(Shift で水平・垂直・45°に揃える)':'指を離すと折り線が決まります'):'離すと折る位置が決まります(黄色が動く側)';
   else if(lockSide)h.innerHTML=lastType==='mouse'
     ?`紙をクリックで<b>${modeName()}</b>(紙の外をクリックか Esc でやめる)`
     :`紙をタップで<b>${modeName()}</b>(紙の外をタップでやめる)`;
@@ -796,8 +806,28 @@ function startGesture(P){
   if(!e1)return false;
   line=null;setMode('drawing');align={kind:'edge',e1,e2:null};return true;
 }
-function gestureMove(P){
-  if(tool==='line'){line.b=snap(P);return;}
+/* Angle snap for the fold line: horizontal, vertical and 45° (as seen on screen).
+   With snapping on, a line within a few degrees is pulled onto the angle unless the end already snapped to a point;
+   Shift forces the nearest angle. The end slides along that angle from the fixed end. */
+let angleMark=null;
+function angleSnap(a,b,force){
+  const dx=b[0]-a[0],dy=b[1]-a[1];
+  if(Math.hypot(dx,dy)*view.s<24)return null;
+  const step=Math.PI/4,ang=Math.atan2(dy,dx),k=Math.round(ang/step);
+  if(!force&&Math.abs(ang-k*step)>(lastType==='mouse'?3:5)*Math.PI/180)return null;
+  const u=[Math.cos(k*step),Math.sin(k*step)],l=dx*u[0]+dy*u[1];
+  return {p:[a[0]+u[0]*l,a[1]+u[1]*l],k:((k%4)+4)%4};
+}
+function snapEnd(anchor,P,shift){
+  angleMark=null;
+  const b=snap(P);
+  if(!shift&&(!opt.snap||snapMark))return b;
+  const r=angleSnap(anchor,b,shift);
+  if(!r)return b;
+  snapMark=null;angleMark={p:r.p,k:r.k};return r.p;
+}
+function gestureMove(P,shift){
+  if(tool==='line'){line.b=snapEnd(line.a,P,shift);return;}
   if(align.kind==='point')align.B=snap(P);
   else{align.e2=pickEdge(P,align.e1);snapMark=null;}
   computeAlign();
@@ -853,10 +883,10 @@ cv.addEventListener('pointermove',e=>{
     down.cur=P;
     if(Math.hypot(P[0]-down.P[0],P[1]-down.P[1])>6)down.moved=true;
     if(down.miss){}
-    else if(mode==='drawing'){gestureMove(P);}
+    else if(mode==='drawing'){gestureMove(P,e.shiftKey);}
     else if(mode==='pending'){
-      if(down.end){line[down.end]=snap(P);}
-      else if(down.moved){if(startGesture(down.P))gestureMove(P);else down.miss=true;}
+      if(down.end){line[down.end]=snapEnd(line[down.end==='a'?'b':'a'],P,e.shiftKey);}
+      else if(down.moved){if(startGesture(down.P))gestureMove(P,e.shiftKey);else down.miss=true;}
     }
   }else if(e.pointerType==='mouse'){
     if(mode==='pending'){if(!lockSide)selSide=sideAt(P);snapMark=null;}
@@ -892,6 +922,7 @@ function endPointer(e,cancel){
     }
   }
   if(lastType!=='mouse')snapMark=null;
+  angleMark=null;
   down=null;updateBar();draw();
 }
 cv.addEventListener('pointerup',e=>endPointer(e,false));
@@ -1004,6 +1035,17 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redoF():undo();}
   else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redoF();}
   else if(e.key==='Escape'&&mode!=='idle'){line=null;setMode('idle');draw();}
+  else if(!e.ctrlKey&&!e.metaKey&&!e.altKey){
+    // single-key shortcuts (desktop). Enter is left to a focused button.
+    const k=e.key.toLowerCase(),free=e.target===document.body||e.target===cv;let hit=true;
+    if(k==='1')setTool('line');else if(k==='2')setTool('point');else if(k==='3')setTool('edge');
+    else if(k==='v')setFoldMode('valley');else if(k==='m')setFoldMode('mountain');
+    else if(k==='f'){if(!e.repeat)turnOver();}else if(k==='r'){if(!e.repeat)rotate90();}
+    else if(k==='enter'&&free&&!$('bFold').hidden)$('bFold').click();
+    else if(k==='0'&&!$('bFit').hidden)$('bFit').click();
+    else hit=false;
+    if(hit)e.preventDefault();
+  }
 });
 document.addEventListener('keyup',e=>{
   if(e.key!==' '||!spaceHeld)return;
