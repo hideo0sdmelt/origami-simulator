@@ -1122,9 +1122,10 @@ new MutationObserver(draw).observe(document.documentElement,{attributes:true,att
 
 /* ---------- keep the work across reloads (IndexedDB) ----------
    Phones drop pages that sit in the background, so the images, folds and history are saved here
-   (a moment after each change, and right away when the page is hidden) and put back on the next open.
+   (a moment after each change, and right away when the page is hidden) and put back on the next open
+   if the last change was within 12 hours.
    Images are stored as PNG of the shrunk canvas; each canvas is encoded once. Nothing leaves the browser. */
-const SAVE_V=1;
+const SAVE_V=1,SAVE_TTL=12*60*60*1000; // older saves are from an earlier puzzle: start fresh instead
 let dbp=null,saveReady=false,saveT=0;
 function db(){
   if(!dbp)dbp=new Promise((res,rej)=>{
@@ -1149,7 +1150,7 @@ async function saveNow(){
   clearTimeout(saveT);
   if(!saveReady)return;
   if(anim){scheduleSave();return;} // facets and G only agree once the animation has ended
-  const s={v:SAVE_V,rot:{...rot},backMode,foldMode,opt:{...opt},G,facets,hist:hist.slice(),redo:redo.slice()};
+  const s={v:SAVE_V,t:Date.now(),rot:{...rot},backMode,foldMode,opt:{...opt},G,facets,hist:hist.slice(),redo:redo.slice()};
   try{
     [s.front,s.back]=await Promise.all([pngOf(src.front),pngOf(src.back)]);
     await idb('readwrite',st=>st.put(s,'current'));
@@ -1166,7 +1167,7 @@ function blobToCanvas(b){
 async function restore(){
   try{
     const s=await idb('readonly',st=>st.get('current'));
-    if(!s||s.v!==SAVE_V)return;
+    if(!s||s.v!==SAVE_V||!(Date.now()-s.t<SAVE_TTL))return; // the save made right after this overwrites it
     const [f,b]=await Promise.all([s.front?blobToCanvas(s.front):null,s.back?blobToCanvas(s.back):null]);
     // if the person already started something while this was loading, keep what they did
     if(anim||hist.length||redo.length||src.front||src.back)return;

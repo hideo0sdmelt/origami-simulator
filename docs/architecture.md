@@ -68,10 +68,11 @@ https://hideo0sdmelt.github.io/origami-simulator/
 ## 保存と復元
 
 - IndexedDB のデータベース `origami`、ストア `state` に、キー `current` で1件だけ持つ
-- 中身:`v`(形式の版、いまは1)、`front` / `back`(縮めた画像の PNG の Blob)、`rot`、`backMode`、`foldMode`、`opt`、`G`、`facets`(表示している状態)、`hist`、`redo`
+- 中身:`v`(形式の版、いまは1)、`t`(保存した時刻)、`front` / `back`(縮めた画像の PNG の Blob)、`rot`、`backMode`、`foldMode`、`opt`、`G`、`facets`(表示している状態)、`hist`、`redo`
 - `scheduleSave()` が0.2秒待ってから `saveNow()` を呼ぶ。`updateUI()`(折る・戻す・アニメーションの終わりなど)、`setImages()`、設定の変更から呼んでいる。アニメーション中は `facets` と `G` が食い違うので、終わるまで待つ
 - 画像の PNG 化は重いので、キャンバスごとに1回だけ作って `pngs`(WeakMap)に取っておく。復元した画像は、読み込んだ Blob をそのまま使う
 - 開いたときは、まずサンプルの紙を出してから `restore()` で非同期に戻す。復元が終わるまで(`saveReady` が false の間)は保存しない。こうしないと、起動時のサンプルの紙で保存が上書きされる
+- `t` が `SAVE_TTL`(12時間)より古い保存は読まない。`t` がない保存も同じ
 - 形式を変えたら `SAVE_V` を上げる。版が違う保存は読まずに捨てる(次の保存で上書きされる)
 
 ## 重なりを見る
