@@ -243,7 +243,7 @@ ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:co
         <li>紙の上をドラッグして折り線を引く</li>
         <li>線の端の●をドラッグすると位置を微調整できる</li>
         <li>折りたい側をクリック。スマホはタップで選んで、もう一度タップで折る</li>
-        <li>2本指で拡大・移動(パソコンはホイールで拡大)。「全体を表示」で元に戻る</li>
+        <li>2本指で拡大・移動。パソコンはホイールで拡大、Space を押しながら(または中ボタンで)ドラッグで移動。「全体を表示」で元に戻る</li>
         <li>間違えたら「戻す」。何度でも試せます</li>
       </ol>
       <p class="note">「点を合わせる」は角をどこかに重ねる折り方、「辺を合わせる」は辺を別の辺に重ねる折り方です。例えば長方形の上の辺を右の辺へドラッグすると、先端に三角ができます。</p>
@@ -773,7 +773,17 @@ function startPinch(){
   pinch={d,s:v.s,w:toW(m,v),fit:targetView(facets).s};
   draw();
 }
+/* Mouse panning: drag with the middle button, or hold Space and drag. Works in any mode and keeps a drawn line. */
+let mpan=null,spaceHeld=false,overCv=false;
+function panBy(dx,dy){view={s:view.s,cx:view.cx-dx/view.s,cy:view.cy-dy/view.s};if(!userView)setUserView(true);draw();}
+function setCursor(){cv.style.cursor=mpan?'grabbing':spaceHeld?'grab':'';}
 cv.addEventListener('pointerdown',e=>{
+  if(!anim&&e.pointerType==='mouse'&&(e.button===1||(e.button===0&&spaceHeld))){
+    e.preventDefault();lastType='mouse';
+    mpan={id:e.pointerId,P:evP(e)};
+    try{cv.setPointerCapture(e.pointerId);}catch(_){}
+    snapMark=null;hoverEdge=null;setCursor();draw();return;
+  }
   if(anim||(e.pointerType==='mouse'&&e.button!==0))return;
   lastType=e.pointerType||'mouse';
   const P=evP(e);
@@ -793,6 +803,7 @@ cv.addEventListener('pointerdown',e=>{
 cv.addEventListener('pointermove',e=>{
   if(anim)return;
   const P=evP(e);
+  if(mpan){if(mpan.id===e.pointerId){panBy(P[0]-mpan.P[0],P[1]-mpan.P[1]);mpan.P=P;}return;}
   if(touches.has(e.pointerId)){
     touches.set(e.pointerId,P);
     if(pinch){if(touches.size>=2){const {d,m}=pair();zoomAt(pinch.s*d/pinch.d,m,pinch.w,pinch.fit);}return;}
@@ -813,6 +824,7 @@ cv.addEventListener('pointermove',e=>{
   draw();
 });
 function endPointer(e,cancel){
+  if(mpan&&mpan.id===e.pointerId){mpan=null;setCursor();return;}
   if(touches.delete(e.pointerId)&&pinch){if(touches.size<2)pinch=null;draw();return;}
   if(!down||down.id!==e.pointerId)return;
   if(down.miss){
@@ -843,13 +855,22 @@ function endPointer(e,cancel){
 }
 cv.addEventListener('pointerup',e=>endPointer(e,false));
 cv.addEventListener('pointercancel',e=>endPointer(e,true));
-cv.addEventListener('pointerleave',e=>{if(!down&&e.pointerType==='mouse'){snapMark=null;hoverEdge=null;if(mode==='pending'&&!lockSide)selSide=0;draw();}});
+cv.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse')overCv=true;});
+cv.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')overCv=false;if(!down&&e.pointerType==='mouse'){snapMark=null;hoverEdge=null;if(mode==='pending'&&!lockSide)selSide=0;draw();}});
+/* Wheel: a mouse wheel zooms at the cursor. A trackpad's two-finger scroll moves the view, and its pinch
+   (sent as a wheel event with ctrlKey) zooms. Sideways scrolling (Shift+wheel, tilt wheel) also moves.
+   Trackpads are told apart by Chrome/Safari's legacy wheelDeltaY, which is exactly -3x deltaY for them. */
 cv.addEventListener('wheel',e=>{
   if(anim)return;
   e.preventDefault();
-  const P=evP(e),k=Math.exp(-e.deltaY*(e.deltaMode===1?0.05:0.0015));
+  const px=e.deltaMode===1?16:1;
+  const pad=!e.ctrlKey&&((e.deltaY===0&&e.deltaX!==0)||(!!e.wheelDeltaY&&e.wheelDeltaY===-3*e.deltaY));
+  if(pad){panBy(-e.deltaX*px,-e.deltaY*px);return;}
+  const P=evP(e),k=Math.exp(-e.deltaY*(e.deltaMode===1?0.05:e.ctrlKey&&Math.abs(e.deltaY)<50?0.01:0.0015));
   zoomAt(view.s*k,P,toW(P),targetView(facets).s);
 },{passive:false});
+// keep the middle button from starting the browser's autoscroll
+cv.addEventListener('mousedown',e=>{if(e.button===1)e.preventDefault();});
 // iOS Safari: keep page-level pinch zoom from fighting the canvas
 cv.addEventListener('gesturestart',e=>e.preventDefault());
 
@@ -935,10 +956,19 @@ document.addEventListener('drop',e=>{
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&$('panel').classList.contains('open')){openSheet(false);return;}
   if(e.target.matches('select,input:not([type=checkbox])'))return; // a ticked checkbox keeps focus; shortcuts should still work
+  // Space held = pan mode. Taken only when nothing is focused or the mouse is over the paper,
+  // so Space still presses a focused button elsewhere.
+  if(e.key===' '&&(e.target===document.body||overCv)){e.preventDefault();if(!spaceHeld){spaceHeld=true;setCursor();}return;}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redoF():undo();}
   else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redoF();}
   else if(e.key==='Escape'&&mode!=='idle'){line=null;setMode('idle');draw();}
 });
+document.addEventListener('keyup',e=>{
+  if(e.key!==' '||!spaceHeld)return;
+  e.preventDefault(); // don't let the release press a focused button
+  spaceHeld=false;setCursor();
+});
+addEventListener('blur',()=>{spaceHeld=false;mpan=null;setCursor();});
 
 new ResizeObserver(resize).observe(cv);
 const mq=matchMedia('(prefers-color-scheme: dark)');mq.addEventListener?.('change',draw);
