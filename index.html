@@ -211,7 +211,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
           <button id="mMountain" aria-pressed="false" title="向こう側に折って下に回す (M)">山折り</button>
         </div>
         <span class="sep"></span>
-        <button id="bUndo" title="元に戻す (Ctrl+Z)" aria-label="戻す">↶<span class="t"> 戻す</span></button>
+        <button id="bUndo" title="元に戻す (Ctrl+Z / Backspace)" aria-label="戻す">↶<span class="t"> 戻す</span></button>
         <button id="bRedo" title="やり直し (Ctrl+Y)" aria-label="進む">↷<span class="t"> 進む</span></button>
         <span class="sep"></span>
         <button id="bTurn" title="紙全体を左右に裏返す (F)">裏返す</button>
@@ -269,7 +269,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <p class="note">「点を合わせる」は角をどこかに重ねる折り方、「辺を合わせる」は辺を別の辺に重ねる折り方です。例えば長方形の上の辺を右の辺へドラッグすると、先端に三角ができます。</p>
       <p class="note">折り線は、水平・垂直・45°の近くで吸い付きます<span class="fine">(Shift を押しながら引くと必ず揃う)</span>。</p>
       <p class="note">画像は紙の端ぴったりに切り抜いておくと、表と裏がきれいに重なります。</p>
-      <p class="note fine">キー:1・2・3 折り方の指定 / 4 重なり / V 谷折り / M 山折り / F 裏返す / R 90°回す / Enter 折る / 0 全体を表示 / Ctrl+Z 戻す / Ctrl+Y 進む / Esc やめる / Space+ドラッグ 移動</p>
+      <p class="note fine">キー:1・2・3 折り方の指定 / 4 重なり / V 谷折り / M 山折り / F 裏返す / R 90°回す / Enter 折る / 0 全体を表示 / Ctrl+Z・Backspace 戻す / Ctrl+Y 進む / Esc やめる / Space+ドラッグ 移動</p>
     </section>
 
     <section id="installSec" hidden>
@@ -1105,6 +1105,7 @@ document.addEventListener('keydown',e=>{
     else if(k==='f'){if(!e.repeat)turnOver();}else if(k==='r'){if(!e.repeat)rotate90();}
     else if(k==='enter'&&free&&!$('bFold').hidden)$('bFold').click();
     else if(k==='0'&&!$('bFit').hidden)$('bFit').click();
+    else if(k==='backspace')undo();
     else hit=false;
     if(hit)e.preventDefault();
   }
@@ -1115,6 +1116,26 @@ document.addEventListener('keyup',e=>{
   spaceHeld=false;setCursor();
 });
 addEventListener('blur',()=>{spaceHeld=false;mpan=null;setCursor();});
+
+/* ---------- browser "back" = one step back ----------
+   The mouse back button, Android's back and Safari's back swipe all arrive as a history back.
+   A hidden extra history entry sits on top of the page; going back lands on popstate instead of
+   leaving. It closes the sheet / the layer view / a drawn line first, then undoes a fold, and puts
+   the entry back. With nothing left to go back, the back goes through and the page is left.
+   The entry is added on a user interaction so Chrome doesn't mark it as skippable. */
+let backTrap=!!history.state?.origamiBack; // after a reload the page already sits on the extra entry
+function armBack(){if(backTrap)return;backTrap=true;history.pushState({origamiBack:1},'');}
+addEventListener('pointerdown',armBack,true);addEventListener('keydown',armBack,true);
+addEventListener('popstate',()=>{
+  if(!backTrap)return;
+  backTrap=false;
+  if($('panel').classList.contains('open'))openSheet(false);
+  else if(peekAt||!$('peek').hidden){clearPeek();draw();}
+  else if(mode!=='idle'){line=null;setMode('idle');draw();}
+  else if(hist.length||anim)undo();
+  else{history.back();return;}
+  armBack();
+});
 
 new ResizeObserver(resize).observe(cv);
 const mq=matchMedia('(prefers-color-scheme: dark)');mq.addEventListener?.('change',draw);
