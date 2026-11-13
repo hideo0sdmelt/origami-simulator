@@ -17,7 +17,7 @@
 
 ## 開発
 
-`index.html` 1枚の静的ページで、ビルドは不要です。`main` に push すると GitHub Pages に反映されます。
+`index.html` 1枚の静的ページで、ビルドは不要です。`main` に push すると GitHub Pages に反映されます(リリース作業はなし)。アイコンや manifest を変えたときは `sw.js` の `VERSION` を上げます。詳しくは [仕組み](docs/architecture.md#公開と更新) を参照。
 
 ローカルで確認するとき:
 

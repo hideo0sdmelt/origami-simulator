@@ -14,11 +14,16 @@
 
 外部から読み込むのは Google Fonts(Zen Kaku Gothic New、Dela Gothic One、IBM Plex Mono)だけ。
 
-## 配信
+## 公開と更新
 
 `main` ブランチを GitHub Pages がそのまま配信する。push すると1分ほどで反映される。
 
 https://hideo0sdmelt.github.io/origami-simulator/
+
+- リリース作業はいらない。ビルドもストアへの提出もなく、push がそのまま公開になる。反映されたかは GitHub の Actions(`pages build and deployment`)か `gh run list` で確認できる
+- ホーム画面に追加して使っている人にも、次に開いたときに新しい版が届く(ページ本体はネット優先で取り直すため)。開いたままの画面は、一度閉じて開き直すまで古いまま
+- アイコン、`manifest.webmanifest`、`sw.js` の `CORE`(先にキャッシュするファイルの一覧)を変えたときは、`sw.js` の `VERSION` を上げる(`v1` → `v2`)。上げないと、インストール済みの人の端末に古いアイコンなどが残る。ページ本体(`index.html`)だけの変更なら上げなくてよい。詳しくは下の「PWA」
+- あとで戻せる区切りがほしいときは、`git tag v1.0` → `git push origin v1.0` のようにタグを付ける。必須ではない
 
 ## 紙のデータの持ち方
 
@@ -134,7 +139,7 @@ Pointer Events でマウスとタッチを同じように扱う。キャンバ�
 | 同じサイトのほかのファイル(アイコン、manifest) | キャッシュ優先 |
 | Google Fonts | キャッシュをすぐ返し、裏で更新する |
 
-インストール時に、ページ本体とアイコンを先にキャッシュする。アイコンや先にキャッシュするファイルを変えたときは、`VERSION` を上げると古いキャッシュが消える。ページ本体だけの変更なら上げなくてよい。
+インストール時に、ページ本体、manifest、アイコンを先にキャッシュする(`CORE`)。アイコン、manifest、`CORE` を変えたときは、`VERSION` を上げると古いキャッシュが消える。ページ本体だけの変更なら上げなくてよい。
 
 `file://` で開いたときは、Service Worker を登録しない。
 
