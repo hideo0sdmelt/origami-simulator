@@ -168,6 +168,25 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   .bar button{padding:6px 5px;font-size:13px;min-width:40px}
   .bar .seg button{min-width:0}
 }
+/* Crop screen: line the four corners up with the paper in a photo, and get it back as seen from straight above. */
+.crop{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;flex-direction:column;gap:8px;
+  padding:max(10px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(10px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
+.cropHead{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:12px;row-gap:2px}
+.cropHead b{font-size:15px}
+.cropHead span{color:var(--muted);font-size:12.5px;line-height:1.45}
+.cropStage{position:relative;flex:1;min-height:0;border-radius:10px;overflow:hidden;background:var(--mat)}
+.cropStage canvas{cursor:default}
+.cropFoot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.cropFoot label{display:flex;align-items:center;gap:8px;font-size:13px;white-space:nowrap}
+.cropFoot select{width:auto;max-width:62vw}
+.cropBtns{display:flex;flex-wrap:wrap;gap:8px;margin-left:auto}
+.crop .primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:700}
+@media (max-width:820px),(max-height:520px){
+  .crop button,.crop select{min-height:44px}
+  .cropBtns{width:100%;margin-left:0}
+  .cropBtns button{flex:1;padding:6px 8px}
+}
+@media (max-height:520px){.cropBtns{width:auto;margin-left:auto}.cropBtns button{flex:none}.cropHead span{display:none}}
 @media (prefers-reduced-motion:reduce){.toast,.panel,.panel.open{transition:none}}
 </style>
 </head>
@@ -235,6 +254,10 @@ input[type=range]{width:100%;accent-color:var(--accent)}
         <button id="rotF" title="表の画像を時計回りに90°回す">表を回転 ⟳</button>
         <button id="rotB" title="裏の画像を時計回りに90°回す">裏を回転 ⟳</button>
       </div>
+      <div class="slots" style="margin-top:8px">
+        <button id="cropF" title="表の画像から、紙の部分を切り抜き直す">表を切り抜く ✂</button>
+        <button id="cropB" title="裏の画像から、紙の部分を切り抜き直す">裏を切り抜く ✂</button>
+      </div>
       <p class="note" id="paperNote">いまはサンプルの紙です。画像を入れると置き換わります。画像と折った状態はこのブラウザの中だけに保存し、どこにも送りません。</p>
       <div class="row" style="margin-top:8px">
         <button id="bSwap">表と裏を入れ替え</button>
@@ -271,7 +294,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <p class="note">「切る」は、線を引いて残したい側を選ぶと、重なった紙をまとめて切ります。「反対側を残す」で残す側を入れ替え、「切ったまま広げる」で切った形を広げて見られます。</p>
       <p class="note">「点を合わせる」は角をどこかに重ねる折り方、「辺を合わせる」は辺を別の辺に重ねる折り方です。例えば長方形の上の辺を右の辺へドラッグすると、先端に三角ができます。</p>
       <p class="note">折り線は、水平・垂直・45°の近くで吸い付きます<span class="fine">(Shift を押しながら引くと必ず揃う)</span>。</p>
-      <p class="note">画像は紙の端ぴったりに切り抜いておくと、表と裏がきれいに重なります。</p>
+      <p class="note">画像を入れると、紙の部分を合わせる画面が開きます。4つの角を紙の角に合わせると、斜めから撮った写真も真上から見た形に直して切り抜きます。表と裏を同じ縦横比にすると、きれいに重なります。</p>
       <p class="note fine">キー:1・2・3 折り方の指定 / 4 重なり / 5 切る / V 谷折り / M 山折り / F 裏返す / R 90°回す / Enter 折る / 0 全体を表示 / Ctrl+Z・Backspace 戻す / Ctrl+Y 進む / Esc やめる / Space+ドラッグ 移動</p>
     </section>
 
@@ -285,6 +308,19 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <button id="bReset" class="danger">広げて最初から</button>
     </section>
   </aside>
+</div>
+
+<div class="crop" id="crop" hidden role="dialog" aria-modal="true" aria-labelledby="cropTitle">
+  <div class="cropHead"><b id="cropTitle">紙の部分を合わせる</b><span>4つの丸を、紙の角に合わせてください。斜めから撮った写真も、真上から見た形に直します。</span></div>
+  <div class="cropStage"><canvas id="ccv" aria-label="切り抜く範囲。4つの角をドラッグして、紙の角に合わせます。"></canvas></div>
+  <div class="cropFoot">
+    <label>縦横比 <select id="cropRatio" aria-label="切り抜いた紙の縦横比"></select></label>
+    <div class="cropBtns">
+      <button id="cropCancel">やめる</button>
+      <button id="cropRaw" title="写真をそのまま紙として使う">切り抜かずに使う</button>
+      <button id="cropOk" class="primary">切り抜いて使う</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -343,8 +379,9 @@ function makeSample(){
 
 let rot={front:0,back:0};
 function dims(which,s=src,r=rot){const img=s[which],odd=r[which]%2===1;return odd?[img.height,img.width]:[img.width,img.height];}
-function shrink(img){
-  const w=img.naturalWidth,h=img.naturalHeight,k=Math.min(1,MAXSIDE/Math.max(w,h));
+function shrink(img,max=MAXSIDE){
+  const w=img.naturalWidth||img.width,h=img.naturalHeight||img.height,k=Math.min(1,max/Math.max(w,h));
+  if(k===1&&img instanceof HTMLCanvasElement)return img;
   return toCanvas(img,Math.max(1,Math.round(w*k)),Math.max(1,Math.round(h*k)));
 }
 // small preview for the image slots (the slot <img> would otherwise decode the full-size photo)
@@ -1121,8 +1158,8 @@ $('bMenu').onclick=()=>openSheet(true);
 $('bClose').onclick=()=>openSheet(false);
 $('scrim').onclick=()=>openSheet(false);
 $('bSwap').onclick=()=>{if(anim)return;if(!src.front&&!src.back){toast('先に画像を入れてください');return;}
-  setImages({front:src.back,back:src.front},{front:rot.back,back:rot.front});};
-$('bSample').onclick=()=>{if(anim)return;setImages({front:null,back:null},{front:0,back:0});};
+  if(setImages({front:src.back,back:src.front},{front:rot.back,back:rot.front}))raws={front:raws.back,back:raws.front};};
+$('bSample').onclick=()=>{if(anim)return;if(setImages({front:null,back:null},{front:0,back:0}))raws={front:null,back:null};};
 $('rotF').onclick=()=>rotateImage('front');$('rotB').onclick=()=>rotateImage('back');
 
 function showThumbs(){
@@ -1134,16 +1171,249 @@ function showThumbs(){
   }
 }
 function loadFile(file,which){
+  if(crop)return;
   if(!file||!/^image\//.test(file.type)){toast('画像ファイルを選んでください');return;}
   const url=URL.createObjectURL(file),img=new Image();
   img.onload=()=>{
     URL.revokeObjectURL(url);
-    const c=shrink(img);
-    whenIdle(()=>{if(setImages({...src,[which]:c},{...rot,[which]:0}))toast(which==='front'?'表を読み込みました':'裏を読み込みました');});
+    // a little larger than the paper's limit, so the part that is cut out still has enough pixels
+    openCrop(which,shrink(img,MAXRAW),null,true);
   };
   img.onerror=()=>{URL.revokeObjectURL(url);toast('この画像は読み込めませんでした。PNG か JPEG で試してください');};
   img.src=url;
 }
+
+/* ---------- cut the paper out of a photo ("紙の部分を合わせる") ----------
+   Four corners are lined up with the paper's corners; the quad is mapped to a rectangle (a homography),
+   so a photo taken at an angle comes out as if seen from straight above. The rectangle's shape is
+   estimated from the quad (Zhang & He, "Whiteboard scanning"), or taken from the other side / a fixed size.
+   The photo it was cut from stays in memory (raws), shrunk to MAXRAW, so it can be cut again. It is not saved. */
+const MAXRAW=2400;
+let raws={front:null,back:null}; // {img: canvas, q: corners in img px, or null when used as it was}
+let crop=null;
+const ccv=$('ccv'),cctx=ccv.getContext('2d');let ccw=0,cch=0;
+const RATIOS=[['square','正方形',1],['a','A判・B判(1:1.41)',Math.SQRT2],['card','はがき(1:1.48)',1.48]];
+const fullQuad=img=>[[0,0],[img.width,0],[img.width,img.height],[0,img.height]];
+// corners in the order top-left, top-right, bottom-right, bottom-left, whichever way they were dragged
+function orderQuad(q){
+  const c=[0,1].map(k=>q.reduce((s,p)=>s+p[k],0)/4),ang=p=>Math.atan2(p[1]-c[1],p[0]-c[0]);
+  const s=q.slice().sort((a,b)=>ang(a)-ang(b));
+  let k=0;for(let i=1;i<4;i++)if(s[i][0]+s[i][1]<s[k][0]+s[k][1])k=i;
+  return [0,1,2,3].map(j=>s[(k+j)%4]);
+}
+const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+// width / height of the real rectangle behind the quad q (tl,tr,br,bl), photographed in an image w x h.
+// The focal length comes from the quad when it can; otherwise a typical phone camera's is assumed.
+function estRatio(q,w,h){
+  const L=Math.max(w,h),u0=w/2,v0=h/2;
+  const m1=[...q[0],1],m2=[...q[1],1],m3=[...q[3],1],m4=[...q[2],1];
+  const cr=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  const dt=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+  const c14=cr(m1,m4),k2=dt(c14,m3)/dt(cr(m2,m4),m3),k3=dt(c14,m2)/dt(cr(m3,m4),m2);
+  const n2=m2.map((v,i)=>k2*v-m1[i]),n3=m3.map((v,i)=>k3*v-m1[i]),zz=n2[2]*n3[2];
+  const f2=zz?-((n2[0]-u0*n2[2])*(n3[0]-u0*n3[2])+(n2[1]-v0*n2[2])*(n3[1]-v0*n3[2]))/zz:0;
+  let f=Math.sqrt(Math.max(0,f2));
+  if(!(f>0.4*L&&f<5*L))f=0.75*L;
+  const len2=n=>((n[0]-u0*n[2])**2+(n[1]-v0*n[2])**2)/(f*f)+n[2]*n[2];
+  const r=Math.sqrt(len2(n2)/len2(n3));
+  if(Number.isFinite(r)&&r>0.02&&r<50)return r;
+  return (dist(q[0],q[1])+dist(q[3],q[2]))/(dist(q[0],q[3])+dist(q[1],q[2])); // the quad's own shape
+}
+// projective map from 4 points to 4 points: [h0..h7], x' = (h0 x + h1 y + h2) / (h6 x + h7 y + 1), y' likewise with h3..h5
+function homography(from,to){
+  const A=[];
+  for(let i=0;i<4;i++){const [x,y]=from[i],[u,v]=to[i];
+    A.push([x,y,1,0,0,0,-u*x,-u*y,u]);A.push([0,0,0,x,y,1,-v*x,-v*y,v]);}
+  for(let c=0;c<8;c++){
+    let p=c;for(let r=c+1;r<8;r++)if(Math.abs(A[r][c])>Math.abs(A[p][c]))p=r;
+    [A[c],A[p]]=[A[p],A[c]];
+    for(let r=0;r<8;r++)if(r!==c){const k=A[r][c]/A[c][c];for(let j=c;j<9;j++)A[r][j]-=k*A[c][j];}
+  }
+  return A.map((row,i)=>row[8]/row[i]);
+}
+// the quad q of img, straightened into a W x H canvas
+function warp(img,q,W,H){
+  const eL=Math.max(dist(q[0],q[1]),dist(q[3],q[2]),dist(q[0],q[3]),dist(q[1],q[2])),k=Math.max(W,H)/eL;
+  if(k<0.8){ // shrink the photo first, so the result is not grainy from skipping pixels
+    img=toCanvas(img,Math.max(1,Math.round(img.width*k)),Math.max(1,Math.round(img.height*k)));
+    q=q.map(p=>[p[0]*k,p[1]*k]);
+  }
+  const h=homography([[0,0],[W,0],[W,H],[0,H]],q);
+  const sw=img.width,sh=img.height,s=img.getContext('2d').getImageData(0,0,sw,sh).data;
+  const out=document.createElement('canvas');out.width=W;out.height=H;
+  const g=out.getContext('2d'),od=g.createImageData(W,H),o=od.data;
+  for(let y=0,i=0;y<H;y++){
+    const Y=y+.5;
+    for(let x=0;x<W;x++,i+=4){
+      const X=x+.5,d=h[6]*X+h[7]*Y+1;
+      let u=(h[0]*X+h[1]*Y+h[2])/d-.5,v=(h[3]*X+h[4]*Y+h[5])/d-.5;
+      u=Math.max(0,Math.min(sw-1,u));v=Math.max(0,Math.min(sh-1,v));
+      const x0=u|0,y0=v|0,x1=Math.min(sw-1,x0+1),y1=Math.min(sh-1,y0+1),fx=u-x0,fy=v-y0;
+      const a=(y0*sw+x0)*4,b=(y0*sw+x1)*4,c=(y1*sw+x0)*4,e=(y1*sw+x1)*4;
+      for(let ch=0;ch<3;ch++){
+        const t=s[a+ch]+(s[b+ch]-s[a+ch])*fx,bt=s[c+ch]+(s[e+ch]-s[c+ch])*fx;
+        o[i+ch]=t+(bt-t)*fy;
+      }
+      o[i+3]=255;
+    }
+  }
+  g.putImageData(od,0,0);return out;
+}
+const otherOf=w=>w==='front'?'back':'front';
+const ratioText=r=>Math.abs(r-1)<0.02?'1:1':r<1?`縦長 1:${(1/r).toFixed(2)}`:`横長 ${r.toFixed(2)}:1`;
+// size of the cut-out paper, in the image's own orientation (before its 90° turns)
+function cropSize(){
+  const {img,which,r0}=crop,q=orderQuad(crop.q),sel=$('cropRatio').value;
+  if(sel==='other'){const [w,h]=dims(otherOf(which));return r0%2?[h,w]:[w,h];}
+  const auto=estRatio(q,img.width,img.height);
+  let r=auto;
+  const fixed=RATIOS.find(x=>x[0]===sel);
+  if(fixed)r=auto<1?1/fixed[2]:fixed[2];
+  // about as many pixels as the paper has in the photo, up to the paper's limit
+  const eW=(dist(q[0],q[1])+dist(q[3],q[2]))/2,eH=(dist(q[0],q[3])+dist(q[1],q[2]))/2;
+  const long=Math.max(40,Math.min(MAXSIDE,Math.round(Math.max(eW,eH))));
+  return r>=1?[long,Math.max(1,Math.round(long/r))]:[Math.max(1,Math.round(long*r)),long];
+}
+function updateRatioLabel(){
+  const o=$('cropRatio').querySelector('option[value="auto"]');
+  if(o)o.textContent=`写真から推定(${ratioText(estRatio(orderQuad(crop.q),crop.img.width,crop.img.height))})`;
+}
+/* fresh: a newly loaded image (Cancel drops it). Otherwise the image already in use is being cut again. */
+function openCrop(which,img,q,fresh){
+  if(crop)return;
+  const other=otherOf(which),r0=fresh?0:rot[which];
+  crop={which,img,q:(q||fullQuad(img)).map(p=>p.slice()),fresh,r0,drag:null,hover:-1};
+  $('cropTitle').textContent=(which==='front'?'表':'裏')+'の紙の部分を合わせる';
+  const sel=$('cropRatio');sel.replaceChildren();
+  const add=(v,t)=>{const o=document.createElement('option');o.value=v;o.textContent=t;sel.append(o);};
+  if(src[other])add('other',(other==='front'?'表':'裏')+'に合わせる');
+  add('auto','');
+  for(const [v,t] of RATIOS)add(v,t);
+  sel.value=src[other]?'other':'auto';
+  updateRatioLabel();
+  if($('panel').classList.contains('open'))openSheet(false);
+  $('crop').hidden=false;resizeCrop();
+  $('cropOk').focus({preventScroll:true});
+}
+function closeCrop(){crop=null;$('crop').hidden=true;ccv.style.cursor='';}
+function applyCrop(asIs){
+  if(!crop)return;
+  const c=crop;let out,q=null;
+  if(asIs)out=shrink(c.img);
+  else{
+    q=orderQuad(c.q);
+    if(area(q)<0.002*c.img.width*c.img.height){toast('4つの角が近すぎます。紙の角に合わせてください');return;}
+    const [W,H]=cropSize();out=warp(c.img,q,W,H);
+  }
+  closeCrop();
+  whenIdle(()=>{
+    if(setImages({...src,[c.which]:out},{...rot,[c.which]:c.r0})){
+      raws[c.which]={img:c.img,q};
+      const n=c.which==='front'?'表':'裏';
+      toast(c.fresh?n+'を読み込みました':n+'を切り抜き直しました');
+    }
+  });
+}
+function recrop(which){
+  if(anim||crop)return;
+  const r=raws[which];
+  if(r){openCrop(which,r.img,r.q,false);return;}
+  if(!src[which]){toast(which==='front'?'先に表の画像を入れてください':'先に裏の画像を入れてください');return;}
+  openCrop(which,src[which],null,false); // e.g. restored after a reload: the photo is gone, cut from what is used now
+}
+$('cropF').onclick=()=>recrop('front');$('cropB').onclick=()=>recrop('back');
+$('cropOk').onclick=()=>applyCrop(false);
+$('cropRaw').onclick=()=>applyCrop(true);
+$('cropCancel').onclick=closeCrop;
+$('cropRatio').onchange=()=>$('cropOk').focus({preventScroll:true});
+
+function resizeCrop(){
+  if(!crop)return;
+  const r=ccv.getBoundingClientRect(),d=window.devicePixelRatio||1;ccw=r.width;cch=r.height;
+  ccv.width=Math.max(1,Math.round(ccw*d));ccv.height=Math.max(1,Math.round(cch*d));
+  drawCrop();
+}
+new ResizeObserver(resizeCrop).observe(ccv);
+// image px -> screen: X = ox + s x
+function cropView(){
+  const p=30,{img}=crop,s=Math.min((ccw-p*2)/img.width,(cch-p*2)/img.height);
+  return {s,ox:(ccw-img.width*s)/2,oy:(cch-img.height*s)/2};
+}
+function drawCropScene(V,C,loupeAt){
+  const g=cctx,{img}=crop,P=crop.q.map(p=>[V.ox+p[0]*V.s,V.oy+p[1]*V.s]);
+  g.fillStyle=C.mat;g.fillRect(0,0,ccw,cch);
+  g.imageSmoothingQuality='high';g.drawImage(img,V.ox,V.oy,img.width*V.s,img.height*V.s);
+  // outside the paper is darkened
+  g.beginPath();g.rect(0,0,ccw,cch);P.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1]));g.closePath();
+  g.fillStyle='rgba(10,14,12,.55)';g.fill('evenodd');
+  g.beginPath();P.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1]));g.closePath();
+  g.lineJoin='round';g.lineWidth=4;g.strokeStyle='rgba(0,0,0,.55)';g.stroke();g.lineWidth=2;g.strokeStyle=C.crease;g.stroke();
+  if(loupeAt)return;
+  // rings, so the corner itself stays visible inside
+  P.forEach((q,i)=>{
+    const on=crop.drag&&crop.drag.i===i||crop.hover===i,r=on?13:11;
+    g.beginPath();g.arc(q[0],q[1],r,0,Math.PI*2);g.lineWidth=5;g.strokeStyle='rgba(0,0,0,.5)';g.stroke();
+    g.lineWidth=3;g.strokeStyle=C.crease;g.stroke();
+    g.beginPath();g.arc(q[0],q[1],2,0,Math.PI*2);g.fillStyle=C.crease;g.fill();
+  });
+}
+let craf=0;
+function drawCrop(){if(!craf)craf=requestAnimationFrame(()=>{craf=0;renderCrop();});}
+function renderCrop(){
+  if(!crop||!ccw)return;
+  const C={mat:css('--mat'),crease:css('--crease')},d=window.devicePixelRatio||1,V=cropView();
+  cctx.setTransform(d,0,0,d,0,0);
+  drawCropScene(V,C,false);
+  const dr=crop.drag;
+  if(dr&&dr.type!=='mouse'){
+    // magnifier above the finger, centred on the corner being moved
+    const w=crop.q[dr.i],R=Math.min(64,Math.max(44,ccw/6)),off=R+56,F=dr.cur;
+    let Q=[F[0],F[1]-off];
+    if(Q[1]-R<4)Q=[F[0]+(F[0]<ccw/2?off:-off),F[1]];
+    Q=[Math.max(R+4,Math.min(ccw-R-4,Q[0])),Math.max(R+4,Math.min(cch-R-4,Q[1]))];
+    const s2=V.s*3,V2={s:s2,ox:Q[0]-w[0]*s2,oy:Q[1]-w[1]*s2};
+    cctx.save();cctx.beginPath();cctx.arc(Q[0],Q[1],R,0,Math.PI*2);cctx.clip();
+    drawCropScene(V2,C,true);
+    cctx.strokeStyle='#fff';cctx.lineWidth=1;cctx.beginPath();
+    cctx.moveTo(Q[0]-10,Q[1]);cctx.lineTo(Q[0]+10,Q[1]);cctx.moveTo(Q[0],Q[1]-10);cctx.lineTo(Q[0],Q[1]+10);cctx.stroke();
+    cctx.restore();
+    cctx.beginPath();cctx.arc(Q[0],Q[1],R,0,Math.PI*2);cctx.lineWidth=3;cctx.strokeStyle='#fff';cctx.stroke();
+    cctx.beginPath();cctx.arc(Q[0],Q[1],R+2,0,Math.PI*2);cctx.lineWidth=1;cctx.strokeStyle='rgba(0,0,0,.45)';cctx.stroke();
+  }
+}
+const cevP=e=>{const r=ccv.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];};
+function cornerAt(P,type){
+  const V=cropView();let best=-1,bd=type==='mouse'?18:44;
+  crop.q.forEach((p,i)=>{const d=Math.hypot(V.ox+p[0]*V.s-P[0],V.oy+p[1]*V.s-P[1]);if(d<bd){bd=d;best=i;}});
+  return best;
+}
+ccv.addEventListener('pointerdown',e=>{
+  if(!crop||crop.drag||(e.pointerType==='mouse'&&e.button!==0))return;
+  const P=cevP(e),i=cornerAt(P,e.pointerType);
+  if(i<0)return;
+  e.preventDefault();
+  try{ccv.setPointerCapture(e.pointerId);}catch(_){}
+  // the corner follows the finger's movement (not jumping under it), so the finger does not hide it
+  crop.drag={i,id:e.pointerId,type:e.pointerType,start:P,cur:P,orig:crop.q[i].slice()};
+  drawCrop();
+});
+ccv.addEventListener('pointermove',e=>{
+  if(!crop)return;
+  const P=cevP(e),dr=crop.drag;
+  if(dr&&dr.id===e.pointerId){
+    const V=cropView(),{img}=crop;dr.cur=P;
+    crop.q[dr.i]=[Math.max(0,Math.min(img.width,dr.orig[0]+(P[0]-dr.start[0])/V.s)),Math.max(0,Math.min(img.height,dr.orig[1]+(P[1]-dr.start[1])/V.s))];
+    updateRatioLabel();drawCrop();
+  }else if(!dr&&e.pointerType==='mouse'){
+    const h=cornerAt(P,'mouse');
+    if(h!==crop.hover){crop.hover=h;ccv.style.cursor=h<0?'':'grab';drawCrop();}
+  }
+});
+function endCropDrag(e){if(crop&&crop.drag&&crop.drag.id===e.pointerId){crop.drag=null;updateRatioLabel();drawCrop();}}
+ccv.addEventListener('pointerup',endCropDrag);
+ccv.addEventListener('pointercancel',endCropDrag);
+ccv.addEventListener('gesturestart',e=>e.preventDefault());
+
 // where a pasted or dropped image goes when no slot was chosen: front if empty, then back, else front
 const autoSlot=()=>!src.front?'front':(!src.back?'back':'front');
 $('fileF').onchange=e=>{loadFile(e.target.files[0],'front');e.target.value='';};
@@ -1167,6 +1437,11 @@ document.addEventListener('drop',e=>{
   const file=e.dataTransfer?.files[0];if(file)loadFile(file,autoSlot());
 });
 document.addEventListener('keydown',e=>{
+  if(crop){
+    if(e.key==='Escape'){e.preventDefault();closeCrop();}
+    else if(e.key==='Enter'&&!e.target.matches('button,select')){e.preventDefault();applyCrop(false);}
+    return;
+  }
   if(e.key==='Escape'&&$('panel').classList.contains('open')){openSheet(false);return;}
   if(e.target.matches('select,input:not([type=checkbox])'))return; // a ticked checkbox keeps focus; shortcuts should still work
   // Space held = pan mode. Taken only when nothing is focused or the mouse is over the paper,
@@ -1207,7 +1482,8 @@ addEventListener('pointerdown',armBack,true);addEventListener('keydown',armBack,
 addEventListener('popstate',()=>{
   if(!backTrap)return;
   backTrap=false;
-  if($('panel').classList.contains('open'))openSheet(false);
+  if(crop)closeCrop();
+  else if($('panel').classList.contains('open'))openSheet(false);
   else if(peekAt||!$('peek').hidden){clearPeek();draw();}
   else if(mode!=='idle'){line=null;setMode('idle');draw();}
   else if(hist.length||anim)undo();
