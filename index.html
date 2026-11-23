@@ -87,7 +87,22 @@ label.chk{display:flex;align-items:center;gap:8px;cursor:pointer;padding:3px 0}
 select{font:inherit;font-size:13px;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:5px 8px;width:100%}
 .note{font-size:12px;color:var(--muted);margin:6px 0 0}
 .note.warn{color:var(--warn)}
-ol.how{margin:0;padding-left:1.3em;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.slotBox{display:flex;flex-direction:column;gap:6px;min-width:0}
+.slotTools{display:grid;grid-template-columns:auto 1fr;gap:6px}
+.slotTools button{padding:4px 8px;font-size:12.5px}
+label.field{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;white-space:nowrap}
+label.field select{flex:1;min-width:0}
+#installSec{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+dialog.help{width:min(520px,calc(100vw - 32px));max-height:min(84vh,680px);overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--fg);padding:0}
+dialog.help::backdrop{background:rgba(0,0,0,.45)}
+.helpHead{display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--panel);padding:10px 16px;border-bottom:1px solid var(--line)}
+.helpHead b{font-size:15px}
+.helpBody{padding:2px 16px 16px}
+.helpBody h3{font-size:12px;letter-spacing:.12em;color:var(--muted);margin:14px 0 6px}
+.helpBody ul{margin:0;padding-left:1.2em;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:12.5px;margin:0}
+.keys dt{font-family:var(--f-mono);white-space:nowrap}
+.keys dd{margin:0}
 .tools{max-width:100%}
 .tools .seg{background:var(--panel);pointer-events:auto;max-width:100%;flex-wrap:wrap}
 .peek{display:flex;align-items:stretch;gap:8px;max-width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 8px;box-shadow:0 4px 18px rgba(0,0,0,.18)}
@@ -257,68 +272,87 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     <section>
       <h2>紙</h2>
       <div class="slots">
-        <label class="slot" id="slotF"><span class="lb">表</span><span class="sm"><span class="fine">画像を選ぶ<br>またはドロップ</span><span class="coarse">タップして<br>選ぶ・撮る</span></span><input type="file" id="fileF" accept="image/*"></label>
-        <label class="slot" id="slotB"><span class="lb">裏</span><span class="sm"><span class="fine">画像を選ぶ<br>またはドロップ</span><span class="coarse">タップして<br>選ぶ・撮る</span></span><input type="file" id="fileB" accept="image/*"></label>
+        <div class="slotBox">
+          <label class="slot" id="slotF"><span class="lb">表</span><span class="sm"><span class="fine">画像を選ぶ<br>またはドロップ</span><span class="coarse">タップして<br>選ぶ・撮る</span></span><input type="file" id="fileF" accept="image/*"></label>
+          <div class="slotTools" id="toolsF" hidden><button id="rotF" title="表の画像を時計回りに90°回す" aria-label="表を90°回す">⟳</button><button id="cropF" title="表の画像から、紙の部分を切り抜き直す">✂ 切り抜く</button></div>
+        </div>
+        <div class="slotBox">
+          <label class="slot" id="slotB"><span class="lb">裏</span><span class="sm"><span class="fine">画像を選ぶ<br>またはドロップ</span><span class="coarse">タップして<br>選ぶ・撮る</span></span><input type="file" id="fileB" accept="image/*"></label>
+          <div class="slotTools" id="toolsB" hidden><button id="rotB" title="裏の画像を時計回りに90°回す" aria-label="裏を90°回す">⟳</button><button id="cropB" title="裏の画像から、紙の部分を切り抜き直す">✂ 切り抜く</button></div>
+        </div>
       </div>
-      <div class="slots" style="margin-top:8px">
-        <button id="rotF" title="表の画像を時計回りに90°回す">表を回転 ⟳</button>
-        <button id="rotB" title="裏の画像を時計回りに90°回す">裏を回転 ⟳</button>
-      </div>
-      <div class="slots" style="margin-top:8px">
-        <button id="cropF" title="表の画像から、紙の部分を切り抜き直す">表を切り抜く ✂</button>
-        <button id="cropB" title="裏の画像から、紙の部分を切り抜き直す">裏を切り抜く ✂</button>
-      </div>
-      <p class="note" id="paperNote">いまはサンプルの紙です。画像を入れると置き換わります。画像と折った状態はこのブラウザの中だけに保存し、どこにも送りません。</p>
-      <div class="row" style="margin-top:8px">
-        <button id="bSwap">表と裏を入れ替え</button>
+      <p class="note" id="paperNote">いまはサンプルの紙です。</p>
+      <label class="field" id="backRow" hidden><span>裏の撮り方</span>
+        <select id="backMode" title="表と裏の絵柄がずれて重なるときは切り替える">
+          <option value="h">左右にめくった</option>
+          <option value="v">上下にめくった</option>
+        </select>
+      </label>
+      <div class="row" id="paperBtns" hidden style="margin-top:8px">
+        <button id="bSwap" title="表と裏の画像を入れ替える">⇄ 表裏を入れ替え</button>
         <button id="bSample">サンプルに戻す</button>
       </div>
-    </section>
-
-    <section>
-      <h2>裏の画像の撮り方</h2>
-      <select id="backMode">
-        <option value="h">紙を左右にめくって撮った</option>
-        <option value="v">紙を上下にめくって撮った</option>
-      </select>
-      <p class="note">表と裏の絵柄がずれて重なるときは、ここを切り替えてください。</p>
+      <p class="note">🔒 画像はこの端末にだけ保存します</p>
     </section>
 
     <section>
       <h2>表示</h2>
-      <label class="chk"><input type="checkbox" id="optSee"> 透かして見る(下の層がうっすら見える)</label>
+      <label class="chk"><input type="checkbox" id="optSee"> 透かして見る</label>
       <label class="chk" id="seeRow" hidden>濃さ <input type="range" id="optAlpha" min="20" max="90" step="5" value="60" aria-label="透かすときの紙の濃さ"></label>
-      <label class="chk"><input type="checkbox" id="optSnap" checked> 角・辺の中点・辺にスナップ</label>
-      <label class="chk"><input type="checkbox" id="optFit"> 折った紙を画面いっぱいに拡大</label>
-    </section>
-
-    <section>
-      <h2>使い方</h2>
-      <ol class="how">
-        <li>紙の上をドラッグして折り線を引く</li>
-        <li>線の端の●をドラッグすると位置を微調整できる</li>
-        <li>折りたい側をクリック。スマホはタップで選んで、もう一度タップで折る</li>
-        <li>2本指で拡大・移動。パソコンはホイールで拡大、Space を押しながら(または中ボタンで)ドラッグで移動。「全体を表示」で元に戻る</li>
-        <li>間違えたら「戻す」。何度でも試せます</li>
-      </ol>
-      <p class="note">「切る」は、線を引いて残したい側を選ぶと、重なった紙をまとめて切ります。「反対側を残す」で残す側を入れ替え、「切ったまま広げる」で切った形を広げて見られます。</p>
-      <p class="note">「点を合わせる」は角をどこかに重ねる折り方、「辺を合わせる」は辺を別の辺に重ねる折り方です。例えば長方形の上の辺を右の辺へドラッグすると、先端に三角ができます。</p>
-      <p class="note">折り線は、水平・垂直・45°の近くで吸い付きます<span class="fine">(Shift を押しながら引くと必ず揃う)</span>。</p>
-      <p class="note">画像を入れると、紙の部分を合わせる画面が開きます。4つの角を紙の角に合わせると、斜めから撮った写真も真上から見た形に直して切り抜きます。表と裏を同じ縦横比にすると、きれいに重なります。</p>
-      <p class="note fine">キー:1・2・3 折り方の指定 / 4 重なり / 5 切る / V 谷折り / M 山折り / F 裏返す / R 90°回す / Enter 折る / 0 全体を表示 / Ctrl+Z・Backspace 戻す / Ctrl+Y 進む / Esc やめる / Space+ドラッグ 移動</p>
+      <label class="chk" title="角・辺の中点・辺に吸い付く"><input type="checkbox" id="optSnap" checked> スナップ(角・中点・辺)</label>
+      <label class="chk"><input type="checkbox" id="optFit"> 折った紙を大きく表示</label>
     </section>
 
     <section id="installSec" hidden>
-      <h2>アプリとして使う</h2>
       <p class="note" id="installNote" style="margin:0"></p>
-      <button id="bInstall" hidden style="margin-top:8px">ホーム画面に追加</button>
+      <button id="bInstall" hidden>📲 アプリとして入れる</button>
     </section>
 
-    <section>
+    <section class="row" style="margin-top:auto">
+      <button id="bHelp" title="使い方とキー操作 (?)">? 使い方</button>
       <button id="bReset" class="danger">広げて最初から</button>
     </section>
   </aside>
 </div>
+
+<dialog class="help" id="help" aria-labelledby="helpTitle">
+  <div class="helpHead"><b id="helpTitle">使い方</b><button id="bHelpClose">閉じる</button></div>
+  <div class="helpBody">
+    <h3>折る</h3>
+    <ul>
+      <li>ドラッグで折り線 → 折る側を<span class="fine">クリック</span><span class="coarse">タップ(もう一度タップで折る)</span></li>
+      <li>線の端の●で微調整。水平・垂直・45°の近くで吸い付く<span class="fine">(Shift で必ず揃う)</span></li>
+      <li><span class="fine">ホイールで拡大、Space+ドラッグで移動</span><span class="coarse">2本指で拡大・移動</span>。「全体を表示」で戻る</li>
+      <li>間違えたら「戻す」</li>
+    </ul>
+    <h3>折り方</h3>
+    <ul>
+      <li><b>点を合わせる</b>:角を好きな点に重ねる</li>
+      <li><b>辺を合わせる</b>:辺を別の辺に重ねる(例:上の辺→右の辺で先端に三角)</li>
+      <li><b>重なり</b>:押した場所の紙を上から順に見る</li>
+      <li><b>切る</b>:線を引いて残す側を選ぶ。重なった紙をまとめて切る</li>
+    </ul>
+    <h3>画像</h3>
+    <ul>
+      <li>4つの角を紙の角に合わせると、斜めの写真もまっすぐに直る</li>
+      <li>表と裏は同じ縦横比にするときれいに重なる</li>
+      <li>裏の絵柄がずれたら「裏の撮り方」を切り替える</li>
+    </ul>
+    <div class="fine">
+      <h3>キー</h3>
+      <dl class="keys">
+        <dt>1–5</dt><dd>線を引く / 点 / 辺 / 重なり / 切る</dd>
+        <dt>V · M</dt><dd>谷折り / 山折り</dd>
+        <dt>Enter</dt><dd>折る</dd>
+        <dt>F · R</dt><dd>裏返す / 90°回す</dd>
+        <dt>Ctrl+Z · Ctrl+Y</dt><dd>戻す / 進む(Backspace でも戻す)</dd>
+        <dt>0</dt><dd>全体を表示</dd>
+        <dt>Esc</dt><dd>やめる</dd>
+        <dt>?</dt><dd>この画面</dd>
+      </dl>
+    </div>
+  </div>
+</dialog>
 
 <div class="crop" id="crop" hidden role="dialog" aria-modal="true" aria-labelledby="cropTitle">
   <div class="cropHead"><b id="cropTitle">紙の部分を合わせる</b><span>4つの丸を、紙の角に合わせてください。斜めから撮った写真も、真上から見た形に直します。</span><button id="cropFull" title="4つの角を、画像の四隅に置き直す">画像の四隅に戻す</button></div>
@@ -444,13 +478,13 @@ function rotateImage(which){
 }
 function updatePaperNote(){
   const el=$('paperNote');
-  if(!src.front&&!src.back){el.className='note';el.textContent='いまはサンプルの紙です。画像を入れると置き換わります。画像と折った状態はこのブラウザの中だけに保存し、どこにも送りません。';return;}
-  let msg='画像と折った状態はこのブラウザの中だけに保存し、どこにも送りません。', warn=false;
+  if(!src.front&&!src.back){el.className='note';el.textContent='いまはサンプルの紙です。';return;}
+  let msg='', warn=false;
   if(src.front&&src.back){
     const df=dims('front'),db=dims('back'),r1=df[0]/df[1],r2=db[0]/db[1];
-    if(Math.abs(r1/r2-1)>0.03){msg='表と裏で縦横比が違うので、裏を表の形に合わせて伸ばしています。'+msg;warn=true;}
-  } else if(!src.back){msg='裏はまだ白紙です。'+msg;}
-  else {msg='表はまだ白紙です。'+msg;}
+    if(Math.abs(r1/r2-1)>0.03){msg='表と裏の縦横比が違うので、裏を伸ばしています。';warn=true;}
+  } else if(!src.back){msg='裏はまだ白紙です。';}
+  else {msg='表はまだ白紙です。';}
   el.className='note'+(warn?' warn':'');el.textContent=msg;
 }
 function resetFolds(keepHistory){
@@ -1175,6 +1209,9 @@ $('scrim').onclick=()=>openSheet(false);
 $('bSwap').onclick=()=>{if(anim)return;if(!src.front&&!src.back){toast('先に画像を入れてください');return;}
   if(setImages({front:src.back,back:src.front},{front:rot.back,back:rot.front}))raws={front:raws.back,back:raws.front};};
 $('bSample').onclick=()=>{if(anim)return;if(setImages({front:null,back:null},{front:0,back:0}))raws={front:null,back:null};};
+function openHelp(){if(crop||$('help').open)return;openSheet(false);$('help').showModal();}
+$('bHelp').onclick=openHelp;$('bHelpClose').onclick=()=>$('help').close();
+$('help').addEventListener('click',e=>{if(e.target===$('help'))$('help').close();}); // click on the backdrop
 $('rotF').onclick=()=>rotateImage('front');$('rotB').onclick=()=>rotateImage('back');
 
 function showThumbs(){
@@ -1183,7 +1220,10 @@ function showThumbs(){
     const url=src[k]?thumbOf(src[k]):null;
     if(url){if(!img){img=document.createElement('img');img.alt='';slot.prepend(img);}img.src=url;img.style.transform=`rotate(${rot[k]*90}deg)`;slot.classList.add('has');}
     else{if(img)img.remove();slot.classList.remove('has');}
+    $(k==='front'?'toolsF':'toolsB').hidden=!url;
   }
+  $('backRow').hidden=!src.back;
+  $('paperBtns').hidden=!src.front&&!src.back;
 }
 function loadFile(file,which){
   if(crop)return;
@@ -1571,6 +1611,7 @@ document.addEventListener('keydown',e=>{
     else if(e.key==='Enter'&&!e.target.matches('button,select')){e.preventDefault();applyCrop(false);}
     return;
   }
+  if($('help').open)return; // the dialog handles Esc itself
   if(e.key==='Escape'&&$('panel').classList.contains('open')){openSheet(false);return;}
   if(e.target.matches('select,input:not([type=checkbox])'))return; // a ticked checkbox keeps focus; shortcuts should still work
   // Space held = pan mode. Taken only when nothing is focused or the mouse is over the paper,
@@ -1588,6 +1629,7 @@ document.addEventListener('keydown',e=>{
     else if(k==='enter'&&free&&!$('bFold').hidden)$('bFold').click();
     else if(k==='0'&&!$('bFit').hidden)$('bFit').click();
     else if(k==='backspace')undo();
+    else if(e.key==='?')openHelp();
     else hit=false;
     if(hit)e.preventDefault();
   }
@@ -1699,13 +1741,11 @@ document.fonts?.ready.then(()=>{if(!src.front&&!src.back){paper=makeSample();dra
 const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
 if(!standalone){
   const iOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
-  $('installSec').hidden=false;
-  $('installNote').textContent=iOS
-    ?'Safari の共有ボタン(□に↑)から「ホーム画面に追加」を選ぶと、アプリのように全画面で開けます。電波がなくても使えます。'
-    :'ブラウザのメニューから「アプリをインストール」または「ホーム画面に追加」を選ぶと、アプリのように全画面で開けます。電波がなくても使えます。';
+  // shown only where it can actually be done: iOS (by hand) or a browser that offers the install prompt
+  if(iOS){$('installSec').hidden=false;$('installNote').textContent='📲 共有ボタン(□に↑)の「ホーム画面に追加」で、アプリとして電波がなくても使えます。';}
   let deferred=null;
-  addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;$('bInstall').hidden=false;});
-  $('bInstall').onclick=async()=>{if(!deferred)return;deferred.prompt();try{await deferred.userChoice;}catch(_){}deferred=null;$('bInstall').hidden=true;};
+  addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;$('installSec').hidden=false;$('installNote').textContent='アプリとして入れると、全画面で電波がなくても使えます。';$('bInstall').hidden=false;});
+  $('bInstall').onclick=async()=>{if(!deferred)return;deferred.prompt();try{await deferred.userChoice;}catch(_){}deferred=null;$('installSec').hidden=true;};
   addEventListener('appinstalled',()=>{$('installSec').hidden=true;});
 }
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
