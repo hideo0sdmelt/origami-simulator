@@ -1211,7 +1211,12 @@ $('bSwap').onclick=()=>{if(anim||!src.front&&!src.back)return;
 $('bSample').onclick=()=>{if(anim)return;if(setImages({front:null,back:null},{front:0,back:0}))raws={front:null,back:null};};
 function openHelp(){if(crop||$('help').open)return;$('help').showModal();} // opens over the sheet; closing it returns there
 $('bHelp').onclick=openHelp;$('bHelpClose').onclick=()=>$('help').close();
-$('help').addEventListener('click',e=>{if(e.target===$('help'))$('help').close();}); // click on the backdrop
+// a click on the backdrop closes it: both the press and the release outside the box, so a text selection
+// dragged out of it or a press on its scrollbar (both land on the dialog itself) does not
+const outsideHelp=e=>{const r=$('help').getBoundingClientRect();return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom;};
+let helpDownOut=false;
+$('help').addEventListener('pointerdown',e=>{helpDownOut=e.target===$('help')&&outsideHelp(e);});
+$('help').addEventListener('click',e=>{if(helpDownOut&&e.target===$('help')&&outsideHelp(e))$('help').close();helpDownOut=false;});
 $('rotF').onclick=()=>rotateImage('front');$('rotB').onclick=()=>rotateImage('back');
 
 function showThumbs(){
