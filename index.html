@@ -282,16 +282,16 @@ input[type=range]{width:100%;accent-color:var(--accent)}
         </div>
       </div>
       <p class="note" id="paperNote">いまはサンプルの紙です。</p>
+      <div class="row" id="paperBtns" hidden style="margin-top:8px">
+        <button id="bSwap" title="表と裏の画像を入れ替える">⇄ 表裏を入れ替え</button>
+        <button id="bSample">サンプルに戻す</button>
+      </div>
       <label class="field" id="backRow" hidden><span>裏の撮り方</span>
         <select id="backMode" title="表と裏の絵柄がずれて重なるときは切り替える">
           <option value="h">左右にめくった</option>
           <option value="v">上下にめくった</option>
         </select>
       </label>
-      <div class="row" id="paperBtns" hidden style="margin-top:8px">
-        <button id="bSwap" title="表と裏の画像を入れ替える">⇄ 表裏を入れ替え</button>
-        <button id="bSample">サンプルに戻す</button>
-      </div>
       <p class="note">🔒 画像はこの端末にだけ保存します</p>
     </section>
 
@@ -473,19 +473,19 @@ function rebuildPaper(){
 }
 function rotateImage(which){
   if(anim)return;
-  if(!src[which]){toast(which==='front'?'先に表の画像を入れてください':'先に裏の画像を入れてください');return;}
+  if(!src[which])return; // the button is hidden then
   setImages(src,{...rot,[which]:(rot[which]+1)%4});
 }
 function updatePaperNote(){
   const el=$('paperNote');
-  if(!src.front&&!src.back){el.className='note';el.textContent='いまはサンプルの紙です。';return;}
+  if(!src.front&&!src.back){el.className='note';el.textContent='いまはサンプルの紙です。';el.hidden=false;return;}
   let msg='', warn=false;
   if(src.front&&src.back){
     const df=dims('front'),db=dims('back'),r1=df[0]/df[1],r2=db[0]/db[1];
     if(Math.abs(r1/r2-1)>0.03){msg='表と裏の縦横比が違うので、裏を伸ばしています。';warn=true;}
   } else if(!src.back){msg='裏はまだ白紙です。';}
   else {msg='表はまだ白紙です。';}
-  el.className='note'+(warn?' warn':'');el.textContent=msg;
+  el.className='note'+(warn?' warn':'');el.textContent=msg;el.hidden=!msg;
 }
 function resetFolds(keepHistory){
   const {W,H}=paper;
@@ -1206,7 +1206,7 @@ function openSheet(b){
 $('bMenu').onclick=()=>openSheet(true);
 $('bClose').onclick=()=>openSheet(false);
 $('scrim').onclick=()=>openSheet(false);
-$('bSwap').onclick=()=>{if(anim)return;if(!src.front&&!src.back){toast('先に画像を入れてください');return;}
+$('bSwap').onclick=()=>{if(anim||!src.front&&!src.back)return;
   if(setImages({front:src.back,back:src.front},{front:rot.back,back:rot.front}))raws={front:raws.back,back:raws.front};};
 $('bSample').onclick=()=>{if(anim)return;if(setImages({front:null,back:null},{front:0,back:0}))raws={front:null,back:null};};
 function openHelp(){if(crop||$('help').open)return;openSheet(false);$('help').showModal();}
@@ -1226,7 +1226,7 @@ function showThumbs(){
   $('paperBtns').hidden=!src.front&&!src.back;
 }
 function loadFile(file,which){
-  if(crop)return;
+  if(crop||$('help').open)return;
   if(!file||!/^image\//.test(file.type)){toast('画像ファイルを選んでください');return;}
   const url=URL.createObjectURL(file),img=new Image();
   img.onload=()=>{
@@ -1319,7 +1319,7 @@ function warp(img,q,W,H){
   g.putImageData(od,0,0);return out;
 }
 const otherOf=w=>w==='front'?'back':'front';
-const ratioText=r=>Math.abs(r-1)<0.02?'1:1':r<1?`縦長 1:${(1/r).toFixed(2)}`:`横長 ${r.toFixed(2)}:1`;
+const ratioText=r=>!Number.isFinite(r)||r<=0?'—':Math.abs(r-1)<0.02?'1:1':r<1?`縦長 1:${(1/r).toFixed(2)}`:`横長 ${r.toFixed(2)}:1`;
 // size of the cut-out paper, in the image's own orientation (before its 90° turns)
 function cropSize(){
   const {img,which,r0}=crop,q=orderQuad(crop.q),sel=$('cropRatio').value;
@@ -1380,7 +1380,7 @@ function recrop(which){
   if(anim||crop)return;
   const r=raws[which];
   if(r){openCrop(which,r.img,r.q||detectPaper(r.img),false);return;}
-  if(!src[which]){toast(which==='front'?'先に表の画像を入れてください':'先に裏の画像を入れてください');return;}
+  if(!src[which])return; // the button is hidden then
   openCrop(which,src[which],null,false); // e.g. restored after a reload: the photo is gone, cut from what is used now
 }
 
@@ -1653,7 +1653,8 @@ addEventListener('pointerdown',armBack,true);addEventListener('keydown',armBack,
 addEventListener('popstate',()=>{
   if(!backTrap)return;
   backTrap=false;
-  if(crop)closeCrop();
+  if($('help').open)$('help').close();
+  else if(crop)closeCrop();
   else if($('panel').classList.contains('open'))openSheet(false);
   else if(peekAt||!$('peek').hidden){clearPeek();draw();}
   else if(mode!=='idle'){line=null;setMode('idle');draw();}
