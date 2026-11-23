@@ -173,6 +173,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   padding:max(10px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(10px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
 .cropHead{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:12px;row-gap:2px}
 .cropHead b{font-size:15px}
+.cropHead button{margin-left:auto;padding:3px 10px;font-size:12.5px}
 .cropHead span{color:var(--muted);font-size:12.5px;line-height:1.45}
 .cropStage{position:relative;flex:1;min-height:0;border-radius:10px;overflow:hidden;background:var(--mat)}
 .cropStage canvas{cursor:default}
@@ -188,6 +189,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 @media (max-width:820px),(max-height:520px){
   .crop button,.crop select{min-height:44px}
   .cropBtns{width:100%;margin-left:0}
+  .cropHead{align-items:center}
+  .cropHead span{order:3;flex-basis:100%}
+  .cropHead button{min-height:36px}
   .cropBtns button{flex:1;padding:6px 8px}
 }
 @media (max-height:520px){.cropFoot{flex-wrap:nowrap}.cropFoot .lbT{display:none}.cropFoot select{max-width:170px}.cropFoot input[type=range]{width:72px}
@@ -229,6 +233,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
         <button id="bCancel" hidden>線を消す</button>
         <button id="bRefold" hidden></button>
         <button id="bUnfold" hidden title="切った形のまま、紙を広げる">切ったまま広げる</button>
+        <button id="bCropOffer" hidden title="いま読み込んだ画像から、紙の部分を切り抜く"></button>
         <button id="bFit" hidden title="拡大をやめて、紙全体を表示する (0)">全体を表示</button>
       </div>
       <div class="bar" id="bar">
@@ -316,7 +321,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 </div>
 
 <div class="crop" id="crop" hidden role="dialog" aria-modal="true" aria-labelledby="cropTitle">
-  <div class="cropHead"><b id="cropTitle">紙の部分を合わせる</b><span>4つの丸を、紙の角に合わせてください。斜めから撮った写真も、真上から見た形に直します。</span></div>
+  <div class="cropHead"><b id="cropTitle">紙の部分を合わせる</b><span>4つの丸を、紙の角に合わせてください。斜めから撮った写真も、真上から見た形に直します。</span><button id="cropFull" title="4つの角を、画像の四隅に置き直す">画像の四隅に戻す</button></div>
   <div class="cropStage"><canvas id="ccv" aria-label="切り抜く範囲。4つの角をドラッグして、紙の角に合わせます。"></canvas></div>
   <div class="cropFoot">
     <label><span class="lbT">縦横比</span> <select id="cropRatio" aria-label="切り抜いた紙の縦横比"></select></label>
@@ -416,7 +421,7 @@ function setImages(s,r){
   const [W,H]=sizeFor(s,r);
   if(paper&&(W!==paper.W||H!==paper.H)&&(hist.length||redo.length)
     &&!confirm('紙の縦横の大きさが変わるため、折った状態と「戻す」の履歴が消えます。続けますか?'))return false;
-  src=s;rot=r;showThumbs();rebuildPaper();scheduleSave();return true;
+  cropOffer=null;src=s;rot=r;showThumbs();rebuildPaper();scheduleSave();return true;
 }
 function buildPaper(){
   if(!src.front&&!src.back)return makeSample();
@@ -793,6 +798,8 @@ function doFold(sigma){
 /* Right after a fold, offer to fold it the other way (valley <-> mountain) on the same line, in one tap.
    The offer goes away with the next action (setMode clears it). */
 let refoldable=false;
+/* After an image went in as it was (no paper found), offer to cut it out anyway, until the next action. */
+let cropOffer=null;
 function setRefold(b){refoldable=b;updateBar();}
 function lastFoldMode(){const f=hist[hist.length-1].fold;return det(G)<0?swapMode(f.mode):f.mode;} // as seen now
 function refold(){
@@ -852,7 +859,7 @@ function redoF(){
 let mode='idle', line=null, down=null, selSide=0, snapMark=null, lastType=matchMedia('(pointer: coarse)').matches?'touch':'mouse';
 let tool='line', align=null, lockSide=false, hoverEdge=null;
 const lineTool=()=>tool==='line'||tool==='cut'; // tools where a line is drawn by hand
-function setMode(m){mode=m;refoldable=false;if(m!=='pending'){selSide=0;lockSide=false;}if(m==='idle')align=null;updateBar();updateHint();}
+function setMode(m){mode=m;refoldable=false;cropOffer=null;if(m!=='pending'){selSide=0;lockSide=false;}if(m==='idle')align=null;updateBar();updateHint();}
 const modeName=()=>foldMode==='valley'?'谷折り':'山折り';
 function updateBar(){
   $('bCancel').hidden=mode!=='pending';$('bFold').hidden=!(mode==='pending'&&lockSide&&selSide);
@@ -864,9 +871,10 @@ function updateBar(){
     rf.title=cutLast?'直前に切った線のまま、切り落とした側を残す':'直前の折りを、同じ線のまま谷折りと山折りを入れ替えて折り直す';
   }
   $('bUnfold').hidden=!(mode==='idle'&&unfoldable());
+  const co=$('bCropOffer');co.hidden=!(cropOffer&&mode==='idle');if(!co.hidden)co.textContent=(cropOffer==='front'?'表':'裏')+'を切り抜く ✂';
   updateAct();
 }
-function updateAct(){$('act').hidden=$('bFold').hidden&&$('bCancel').hidden&&$('bRefold').hidden&&$('bUnfold').hidden&&$('bFit').hidden;}
+function updateAct(){$('act').hidden=$('bFold').hidden&&$('bCancel').hidden&&$('bRefold').hidden&&$('bUnfold').hidden&&$('bCropOffer').hidden&&$('bFit').hidden;}
 function updateHint(){
   const h=$('hint');
   if(mode==='idle'&&tool==='peek')h.innerHTML=peekAt
@@ -1143,6 +1151,7 @@ $('bCancel').onclick=()=>{line=null;setMode('idle');draw();};
 $('bFold').onclick=()=>{if(mode==='pending'&&selSide)doFold(selSide);};
 $('bRefold').onclick=refold;
 $('bUnfold').onclick=unfold;
+$('bCropOffer').onclick=()=>{const w=cropOffer;cropOffer=null;updateBar();if(w)recrop(w);};
 function setTool(t){if(anim)return;tool=t;line=null;hoverEdge=null;snapMark=null;clearPeek();setMode('idle');
   for(const [id,v] of [['tLine','line'],['tPoint','point'],['tEdge','edge'],['tPeek','peek'],['tCut','cut']])$(id).setAttribute('aria-pressed',t===v);draw();}
 $('tLine').onclick=()=>setTool('line');$('tPoint').onclick=()=>setTool('point');$('tEdge').onclick=()=>setTool('edge');$('tPeek').onclick=()=>setTool('peek');$('tCut').onclick=()=>setTool('cut');
@@ -1187,7 +1196,7 @@ function loadFile(file,which){
     if(q){openCrop(which,raw,q,true);return;}
     // no paper with a background around it (a scan, a PDF page): use it as it is, without asking
     const n=which==='front'?'表':'裏';
-    useImage(which,raw,null,shrink(raw),0,`${n}を読み込みました(紙の部分を切り抜くときは「${n}を切り抜く」)`,3500);
+    useImage(which,raw,null,shrink(raw),0,`${n}を読み込みました(紙が見つからなかったので、そのまま使います)`,3000,true);
   };
   img.onerror=()=>{URL.revokeObjectURL(url);toast('この画像は読み込めませんでした。PNG か JPEG で試してください');};
   img.src=url;
@@ -1322,9 +1331,9 @@ function applyCrop(asIs){
   useImage(c.which,c.img,q,out,c.r0,c.fresh?n+'を読み込みました':n+'を切り抜き直しました');
 }
 // raw: the photo it came from (kept for cutting again), q: the corners used (null: used as it was)
-function useImage(which,raw,q,out,r0,msg,ms){
+function useImage(which,raw,q,out,r0,msg,ms,offer){
   whenIdle(()=>{
-    if(setImages({...src,[which]:out},{...rot,[which]:r0})){raws[which]={img:raw,q};toast(msg,ms);}
+    if(setImages({...src,[which]:out},{...rot,[which]:r0})){raws[which]={img:raw,q};toast(msg,ms);if(offer){cropOffer=which;updateBar();}}
   });
 }
 function recrop(which){
@@ -1441,6 +1450,7 @@ $('cropF').onclick=()=>recrop('front');$('cropB').onclick=()=>recrop('back');
 $('cropOk').onclick=()=>applyCrop(false);
 $('cropRaw').onclick=()=>applyCrop(true);
 $('cropCancel').onclick=closeCrop;
+$('cropFull').onclick=()=>{if(!crop||crop.drag)return;crop.q=fullQuad(crop.img);crop.ovDirty=true;updateRatioLabel();drawCrop();};
 $('cropRatio').onchange=()=>$('cropOk').focus({preventScroll:true});
 
 function resizeCrop(){
